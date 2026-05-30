@@ -694,7 +694,7 @@ Confirm all of the following before or at the start of Phase 1.
 | # | Question | Why it matters |
 |-|-|-|
 | 1 | **Data residency:** Managed Supabase/Vercel in EU region, or must data stay inside SolServices' own Azure tenant? | Determines hosting topology; Azure tenant requires Supabase self-host or Azure PostgreSQL + custom deployment |
-| 2 | **Weekly update cut-off:** Exact day, time, and timezone for the update cycle deadline (default assumption: Friday 17:00 local time) | pg_cron jobs must be scheduled in a fixed timezone; client's fiscal week must align |
+| 2 | **Weekly update cut-off:** Day + time still to confirm (default: Friday 17:00). Timezone **confirmed: `Europe/Budapest`** (Budapest, Hungary) — set as `APP_TIMEZONE`; pg_cron schedules use it. | pg_cron jobs scheduled in `Europe/Budapest`; client's fiscal week must align |
 | 3 | **Budget source of truth:** Does financial data (actuals, forecasts) originate in the PMO Control Tower, or is it pulled from an external system (ERP, finance platform)? | Determines whether we build a budget entry UI or a data integration layer |
 | 4 | **Teams/Outlook (full tier):** Is the full Microsoft Graph integration (Teams meetings, calendar sync, Teams notifications) in scope for v1, or is light tier (login + email) sufficient for launch? | Phase 8 scope and timeline |
 | 5 | **Audit retention period:** How long must audit records be retained? Indefinitely, or a defined period (e.g., 7 years for regulatory compliance)? | Affects storage sizing and whether we need a cold-archive path (no prune path in hot DB) |
