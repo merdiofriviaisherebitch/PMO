@@ -6,7 +6,17 @@ research/vendor/
 .env
 .env*.local
 
-# Node / Next.js (pre-emptive, for the build session)
+# Node / Next.js
 node_modules/
 .next/
 .vercel/
+/out/
+/build/
+
+# Tooling / test artifacts
+*.tsbuildinfo
+/coverage/
+*.pem
+
+# OS
+.DS_Store
