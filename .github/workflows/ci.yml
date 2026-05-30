@@ -44,3 +44,35 @@ jobs:
 
       - name: Build
         run: bun run build
+
+  rls-isolation:
+    name: RLS Isolation (pen-test + exhaustive regression)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Start local Supabase stack
+        run: supabase start
+
+      - name: Apply migrations + seed (db reset)
+        run: supabase db reset
+
+      - name: RLS isolation pen-test (CLAUDE.md §15 — the non-negotiable gate)
+        run: |
+          psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" \
+            -v ON_ERROR_STOP=1 -f supabase/tests/rls_pentest.sql
+
+      - name: Exhaustive RLS regression (every table has RLS + a policy)
+        run: |
+          psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" \
+            -v ON_ERROR_STOP=1 -f supabase/tests/rls_regression.sql
+
+      - name: Stop stack
+        if: always()
+        run: supabase stop
