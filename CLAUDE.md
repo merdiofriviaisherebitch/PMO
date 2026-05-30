@@ -2,8 +2,10 @@
 
 > **This file is the single source of truth for a fresh Claude Code session.**
 > A session that reads only this file must be able to build the full product with no other context.
-> Last updated: 2026-05-30 (rev 2).
+> Last updated: 2026-05-30 (rev 3).
 > Repository: https://github.com/merdiofriviaisherebitch/PMO.git
+>
+> **Changelog — 2026-05-30 (rev 3): architecture deepening pass (via `improve-codebase-architecture`) + engineering-skill suite.** Centralized the audit write path into one `audit_capture()` trigger + `resolve_scope()` resolver so scope denormalization has one home (§9, §14); factored escalation rule evaluation into a pure `due_escalations(now)` module with an injected clock and put notifications behind a `Notifier` **port** with Resend/Teams/in-memory adapters (§11, §12, §14); made baseline **delta** a single module consumed everywhere (§5, §9); added a `belongs_to_my_department()` RLS helper and a "Scope" glossary term (§3, §10); recorded the full review in §20. Documented the mattpocock engineering skills (`tdd`, `diagnose`, `to-issues`, `to-prd`, `improve-codebase-architecture`) with milestone usage in §19, and ran `setup-matt-pocock-skills` to scaffold `docs/agents/` (issue tracker, triage labels, domain docs), recorded in §19.6.
 >
 > **Changelog — 2026-05-30 (rev 2): security-hardening pass, all items reflected before Phase 1.** Specified JWT claim issuance via a Supabase Custom Access Token (Auth) Hook + claim lockdown/staleness (§4, §7, §10, §17, §18); scoped Realtime and Storage explicitly because table RLS does not cover them (§7, §8, §10, §15, §17); required manual department scoping on every service-role path (§4, §10, §14, §15, §17); denormalized `department_id`/`project_id` onto the audit + polymorphic history tables to resolve a §9↔§10 contradiction (§9, §10); fixed the escalation `dedup_key` to include the ladder `step` + a per-rule period bucket (§6, §8, §9, §11); softened the audit-immutability claim to "immutable to the application/app role" (§3, §6); added RLS performance helpers and an exhaustive CI isolation regression (§10, §15); corrected the Leantime `msghash` citation (§16); defined the rejected-update transition and review-rigor tiers (§5, §19).
 
@@ -54,6 +56,8 @@ This is a governance and accountability product. Every architectural decision mu
 | Audit trail | An append-only log of every change to every entity: who changed what, from what value, to what value, and when. Immutable to the application and the application's Postgres role (UPDATE/DELETE revoked; writes only via SECURITY DEFINER triggers). A Postgres superuser/DB admin can still delete rows on self-hosted Postgres — true write-once against a DB admin requires shipping records to an external append-only store (optional hardening, see §6). |
 | Department workspace | The intersection of a project and a department — the scoped area where a department enters and manages its portion of a project. |
 | Update cycle | A recurring weekly window during which each department must submit a progress update. Typically opens Monday and closes Friday EOD. Missed deadlines trigger automatic chasers. |
+| Scope | The unit a row/policy/report/escalation is bounded to: `department`, `project`, the `department_workspace` (project×department), or `global`. Represented consistently as `department_id` + `project_id` (both nullable; the pair encodes the scope). This is the single vocabulary for all isolation and targeting — avoid inventing `target_scope`/`scope_type` variants. |
+| Deep module / seam | Architecture vocabulary (used in §20): a *deep* module hides a lot of behaviour behind a small interface; a *seam* is where that interface lives (where behaviour can be swapped, e.g. a test adapter). We prefer a few deep modules over many shallow ones — it concentrates change, bugs, and tests in one place. |
 | The 9 departments | Accounting, Legal, Finance, Geothermal, Back Office, IT, Technical, Lumentrade, Project Development. |
 
 ---
@@ -87,7 +91,7 @@ This is a governance and accountability product. Every architectural decision mu
 
 4. **Approvals & Sign-off** — A department member drafts an update; it enters a `pending` state; the Director reviews and either approves or rejects it. State machine: `draft → pending → approved`, or `pending → rejected → draft` — a rejected update returns to `draft` for the member to revise and resubmit; it does not dead-end. Transitions are role-gated in both RLS policies and application logic. An approved update becomes part of the permanent record.
 
-5. **Baseline Lock, Revisions, Deltas** — When a project plan is ready, it is locked as a named baseline (scope, schedule, budget). Subsequent changes are recorded as revisions. The system computes and displays the delta between current state and the locked baseline at all times.
+5. **Baseline Lock, Revisions, Deltas** — When a project plan is ready, it is locked as a named baseline (scope, schedule, budget). Subsequent changes are recorded as revisions. The delta between current state and the locked baseline is computed by a **single `delta(project, at?)` module** (the only place that diffs current-vs-snapshot); the dashboard, reports, and the delta view all consume it — never recompute the diff per view (§20).
 
 6. **Audit Trail** — Append-only, tamper-resistant log of every change to every entity. Implemented as a Postgres table with UPDATE and DELETE revoked at the role level, written exclusively by SECURITY DEFINER triggers. App-layer discipline is insufficient; DB-level enforcement is required.
 
@@ -250,7 +254,7 @@ baselines
 
 revisions
   id, baseline_id → baselines, created_at, created_by → users,
-  delta (jsonb)  -- computed diff from baseline snapshot
+  delta (jsonb)  -- computed by the single delta(project, at?) module (§5, §20); never diffed ad hoc per consumer
 
 audit_log
   id (bigserial), entity_type, entity_id, action (create|update|delete|approve|etc.),
@@ -258,7 +262,10 @@ audit_log
   department_id → departments, project_id → projects,  -- denormalized BY THE TRIGGER at write time, for RLS scoping
   old_values (jsonb), new_values (jsonb), occurred_at
   -- UPDATE and DELETE revoked for app role; written by SECURITY DEFINER trigger only
-  -- the trigger MUST populate department_id/project_id so directors can be granted own-department SELECT (§10)
+  -- ONE generic trigger function audit_capture() is attached to every audited table; it calls
+  -- resolve_scope(entity_type, entity_id) -> (department_id, project_id) so scope denormalization
+  -- lives in exactly ONE place (see §20). The same resolver feeds rag_status_history/approvals/escalation_events,
+  -- so directors can be granted own-department SELECT (§10) without per-table bespoke logic.
 
 dependencies
   id, source_task_id → tasks, target_task_id → tasks,
@@ -335,6 +342,14 @@ $$;
 CREATE FUNCTION public.is_executive() RETURNS boolean LANGUAGE sql STABLE AS $$
   SELECT ((SELECT auth.jwt()) ->> 'role') = 'executive'
 $$;
+-- Deepen the repeated "join through workspace to a department" predicate into ONE helper
+-- so no workspace-child policy (tasks, budgets, department_updates, …) re-implements the join (§20):
+CREATE FUNCTION public.belongs_to_my_department(p_workspace_id uuid) RETURNS boolean LANGUAGE sql STABLE AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM department_workspaces w
+    WHERE w.id = p_workspace_id AND w.department_id = public.current_department()
+  )
+$$;
 ```
 
 Wrapping `auth.jwt()` as `(SELECT auth.jwt())` makes Postgres evaluate it **once per query**, not once per row — a required RLS performance pattern at our row counts.
@@ -353,8 +368,7 @@ CREATE POLICY "members see own department workspaces"
 CREATE POLICY "members see tasks in own department"
   ON tasks FOR SELECT
   USING (
-    workspace_id IN (SELECT id FROM department_workspaces WHERE department_id = public.current_department())
-    OR public.is_executive()
+    public.belongs_to_my_department(workspace_id) OR public.is_executive()
   );
 
 -- audit_log / rag_status_history / approvals / escalation_events are polymorphic
@@ -423,6 +437,11 @@ Each fired step writes a distinct `escalation_events` row (carrying its `level`)
 
 The `dedup_key` UNIQUE constraint on `notification_outbox` ensures a second INSERT for the same **rule + step + target + period** is silently dropped — each ladder step sends exactly once per period, and the steps are independent. The `SELECT ... FOR UPDATE SKIP LOCKED` pattern ensures concurrent cron instances do not double-process. A failed send sets `status = 'failed'` and is retried by the outbox sender job with exponential backoff, not by creating a new row.
 
+### Deepening: separate "what is due" from "how it sends" (see §20)
+
+- **Rule evaluation is a pure module.** `due_escalations(now) -> [{rule, step, target, recipient, department_id, project_id}]` computes which (rule, step, target) tuples are due — each `rule_type` (`late_update` / `red_lingering` / `blocked_dependency`) computes its own anchor time behind the one interface. The **clock is injected**, so the whole engine is unit-tested with a fake clock through this single interface — no real time, no real sends. The dispatcher just consumes the list and writes outbox rows.
+- **Delivery is behind a `Notifier` port.** The engine depends on a `Notifier` interface (`send(recipient, message, channel)`), not on Resend directly. Adapters: a **Resend adapter** (email, now), a **Teams/Graph adapter** (Phase 8), and an **in-memory adapter** (tests). Two real adapters (email today, Teams later — §12) justify the seam, and tests assert what was sent without touching Resend.
+
 ### Anti-patterns avoided (negative lessons from the study)
 
 - Taiga `select_for_update()` batch: the correct anti-double-send pattern — adopt.
@@ -460,6 +479,8 @@ SolServices uses Microsoft 365. Users sign in with their work account via Micros
 - Teams channel notifications for escalations (Graph: `ChannelMessage.Send` or `chatMessage.send`).
 
 All Graph calls happen inside Supabase Edge Functions using application-level permissions (client credentials flow) or delegated tokens stored securely. Never call Graph from the browser.
+
+The Teams/Outlook channel is a **`Notifier` adapter** behind the same port the email (Resend) notifications use (§11, §20). Adding Teams at Phase 8 is a new adapter, not a rewrite of the escalation engine — the engine only ever calls `Notifier.send(...)`.
 
 ---
 
@@ -519,6 +540,9 @@ supabase/
     graph-bridge/               # Microsoft Graph API calls
     report-generator/
   seed.sql
+docs/
+  agents/                       # mattpocock-suite config: issue tracker, triage labels, domain (§19.6)
+  adr/                          # Architecture Decision Records — created lazily as decisions crystallize
 research/                       # Study output (gitignored vendor clones)
   reports/                      # The 8 report files + RANKING.md + UTILIZATION_REPORT.md
   vendor/                       # Cloned repos — NEVER import from here into app code
@@ -536,7 +560,9 @@ research/                       # Study output (gitignored vendor clones)
 - Edge Functions use `SUPABASE_SERVICE_ROLE_KEY`. They must validate the incoming request (shared secret or JWT) before acting.
 - Service-role code (Edge Functions, pg_cron jobs, report generator) bypasses RLS — it MUST re-apply the department/project filter in code (see §10). Never assume RLS protects a service-role query.
 - The JWT `role`/`department_id` claims come from the Custom Access Token (Auth) Hook (§10). Never read role/department from a client-supplied value; the `users` table forbids self-update of those columns.
-- Audit log writes must go through triggers, not application code. Never insert into `audit_log` from a route handler.
+- Audit log writes must go through triggers, not application code. Never insert into `audit_log` from a route handler. Use ONE generic `audit_capture()` trigger function on every audited table, backed by a single `resolve_scope()` resolver — do not hand-write per-table audit logic (§20).
+- Put external services behind a port. The escalation/notification engine depends on a `Notifier` interface (Resend adapter now, Teams/Graph adapter at Phase 8, in-memory adapter for tests); rule evaluation is the pure `due_escalations(now)` module with an injected clock (§11, §20). Keep transport out of the domain logic.
+- Compute baseline delta in the one `delta()` module; never diff current-vs-baseline ad hoc in a view, report, or route handler (§5, §20).
 - Enumerations in Postgres (not as varchar) for all finite-value fields: `rag_enum`, `update_status`, etc.
 
 ---
@@ -700,15 +726,21 @@ This project relies on a fixed set of installed agent **skills**. They are not o
 | `anthropic-skills:pdf` | Anthropic plugin | Create/fill/merge/split/extract/OCR PDFs. | Auto-triggers on PDF tasks; or `/pdf` |
 | `anthropic-skills:docx` | Anthropic plugin | Create/edit Word documents. | Auto-triggers; or `/docx` |
 | `anthropic-skills:xlsx` | Anthropic plugin | Create/edit Excel workbooks. | Auto-triggers; or `/xlsx` |
+| `tdd` | Installed (mattpocock) | Red→green→refactor as **vertical slices** (one test → one impl; never "all tests first"). Tests assert behaviour through the public interface so they survive refactors. Bundles `deep-modules.md`, `interface-design.md`, `mocking.md`. | When building a feature or fixing a bug test-first; and to **run each phase's tests in their appropriate scope** at the gate (§15, §19.2) |
+| `diagnose` | Installed (mattpocock) | Disciplined debugging loop for hard bugs / perf regressions: reproduce → minimise → hypothesise → instrument → fix → regression-test. | When something is broken/throwing/failing or a perf regression appears mid-phase — "diagnose this" |
+| `to-prd` | Installed (mattpocock) | Turns the current conversation/scope into a PRD published to the project issue tracker. | At a phase kickoff, to turn agreed scope into a written PRD before breaking it down |
+| `to-issues` | Installed (mattpocock) | Breaks a plan/spec/PRD into independently-grabbable issues using tracer-bullet vertical slices. | After `to-prd`, to turn a phase's PRD into implementation tickets on the tracker |
+| `improve-codebase-architecture` | Installed (mattpocock) | Finds **deepening** opportunities (shallow→deep modules), informed by the domain glossary + ADRs; outputs an HTML report of candidates, then grills the chosen one. Vocabulary: module/interface/seam/leverage/locality + the deletion test. | At the **end of a phase** (alongside `thermo-nuclear`) and whenever a module feels tangled or is hard to test through its interface. Used to produce §20. |
 
 > All skills run with full agent permissions. Review their output before applying. `requesting-code-review` requires git SHAs, so this project must be a git repo from Phase 0 and every phase boundary must be tagged.
+> **The mattpocock skills are a suite.** `to-issues`, `to-prd`, `diagnose`, `tdd`, and `improve-codebase-architecture` read the project's domain glossary + ADRs and publish to an issue tracker. Run **`setup-matt-pocock-skills`** once (it writes an `## Agent skills` block + a `docs/agents/` layout recording the tracker = this GitHub repo, the triage labels, and the domain-doc location) before relying on `to-issues`/`to-prd`. Until a dedicated `CONTEXT.md` / `docs/adr/` exists, these skills treat **this CLAUDE.md** as the domain glossary and decision record.
 
 ### 19.2 The standard per-phase review gate (run on EVERY phase)
 
 Run this sequence at the close of **every** phase 0–9. The order matters: prove it works first, then review behavior, then clean up structure.
 
 1. **Build the phase.** Do NOT run `thermo-nuclear-code-quality-review` mid-build — it will try to refactor things that aren't finished yet and fight you.
-2. **Pass the functional test gate** for that phase (§13), including the isolation pen-test where relevant (§15).
+2. **Pass the functional test gate** for that phase (§13). Build features test-first with the **`tdd`** skill (one test → one impl), and run **that phase's tests in their appropriate scope** — the RLS integration suite for Phase 1, the escalation tests for Phase 5, the export tests for Phase 7, etc. (the test groups in §15) — plus the isolation pen-test where relevant. `tdd` runs the scoped suite for the milestone being closed, not unrelated suites.
 3. **Run the built-in `/code-review`** against the phase diff. Scale effort to risk: `medium` for routine phases (2, 6, 7); `high` or `ultra` for the high-stakes phases (**1 identity/RLS, 3 audit/baseline, 5 escalation, 9 hardening**). Use `--fix` to apply, or `--comment` if working through a PR.
 4. **Run the complementary `requesting-code-review`** against the same diff (`BASE_SHA = phase-N-start`, `HEAD_SHA = phase-N-end`). This gives an independent, fresh-context review that catches what a diff-only pass misses (missing requirements, wrong abstractions, untested paths). Both reviews run after each phase by default — see the rigor tiers note below for the lighter option on low-risk phases.
 5. **Once the gate passes and the feature actually works, run `thermo-nuclear-code-quality-review`** as a structural-cleanup pass before moving to the next milestone (see §19.3).
@@ -747,6 +779,40 @@ npx skills add https://github.com/cursor/plugins --skill thermo-nuclear-code-qua
 npx skills add https://github.com/vercel-labs/agent-skills --skill vercel-react-best-practices --global --yes
 npx skills add https://github.com/supabase/agent-skills --skill supabase --global --yes
 npx skills add https://github.com/supabase/agent-skills --skill supabase-postgres-best-practices --global --yes
+# mattpocock engineering suite (ONE --skill per call; --full-depth because they live in subdirs):
+npx skills add https://github.com/mattpocock/skills --skill tdd --full-depth --global --yes
+npx skills add https://github.com/mattpocock/skills --skill diagnose --full-depth --global --yes
+npx skills add https://github.com/mattpocock/skills --skill to-issues --full-depth --global --yes
+npx skills add https://github.com/mattpocock/skills --skill to-prd --full-depth --global --yes
+npx skills add https://github.com/mattpocock/skills --skill improve-codebase-architecture --full-depth --global --yes
+# recommended companion — sets up the suite's tracker / triage labels / domain-doc context:
+npx skills add https://github.com/mattpocock/skills --skill setup-matt-pocock-skills --full-depth --global --yes
 ```
 
 The Anthropic `pdf` / `docx` / `xlsx` skills are provided by the `anthropic-skills` plugin and are already available; install standalone copies from `https://github.com/anthropics/skills` only if that plugin is ever unavailable. The `code-review`, `simplify`, and `security-review` skills are built into Claude Code — nothing to install.
+
+### 19.6 Suite configuration (issue tracker, triage labels, domain docs)
+
+The mattpocock engineering skills read per-repo config from `docs/agents/` (scaffolded by `setup-matt-pocock-skills`, 2026-05-30):
+
+- **Issue tracker — GitHub.** Issues/PRDs live in `merdiofriviaisherebitch/PMO` via the `gh` CLI. Push the repo and enable GitHub Issues before `to-issues`/`to-prd` can publish; until then they draft issue bodies locally. See `docs/agents/issue-tracker.md`.
+- **Triage labels — canonical five.** `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix` (not yet created on the remote — `gh label create …` when Issues is on). See `docs/agents/triage-labels.md`.
+- **Domain docs — single-context.** Until a dedicated `CONTEXT.md` / `docs/adr/` exist, **this CLAUDE.md is the domain glossary (§3) and the decision record (§6 non-negotiables, §20 deepening decisions)** — the suite uses that vocabulary and flags conflicts against those instead of ADRs. See `docs/agents/domain.md`.
+
+---
+
+## 20. Architecture Review — Deepening Pass (2026-05-30)
+
+Run with the `improve-codebase-architecture` lens (deep vs shallow modules, **seams**, **leverage**, **locality**, the **deletion test**) against the **documented** architecture — no code exists yet, so this is a pre-build design review. A full visual report (Tailwind cards + before/after) is written to the OS temp dir per run and is not committed. Decisions marked **Applied** are already baked into the sections above; **Open** items are for the build session to grill before the phase that touches them.
+
+| # | Candidate | Strength | Status | Where |
+|-|-|-|-|-|
+| C1 | **One `audit_capture()` trigger + `resolve_scope()` resolver** instead of per-table audit triggers. Scope denormalization gets one home (locality); one place to correctly derive `department_id`/`project_id` for `audit_log` + `rag_status_history` + `approvals` + `escalation_events`. Deletion test: a bespoke per-table trigger just re-spreads identical logic across N tables — and one table getting it wrong silently breaks director visibility of audit rows. | Strong | Applied | §9, §14 |
+| C2 | **`due_escalations(now)` pure evaluator** behind one interface, clock injected. The engine's "what is due" logic (per `rule_type`) is unit-tested through one seam with a fake clock — no real time, no real sends. Hardens non-negotiable #3. | Strong | Applied | §11, §14 |
+| C3 | **`Notifier` port** with Resend + Teams + in-memory adapters. Escalation depends on the port, not Resend; "Teams later" becomes a new adapter, not a rewrite. Two real adapters (email now, Teams at Phase 8) justify the seam. | Strong | Applied | §11, §12, §14 |
+| C4 | **Single `delta(project, at?)` module.** Current-vs-baseline diff lives in one deep module consumed by dashboard / reports / delta view; never recomputed per consumer. | Strong | Applied | §5, §9 |
+| C5 | **`belongs_to_my_department(workspace_id)` RLS helper.** Deepens the repeated "join through workspace to a department" predicate so no workspace-child policy re-implements the join. | Worth exploring | Applied | §10 |
+| C6 | **Name "Scope" as one domain term** (department / project / workspace / global) with a single `department_id`+`project_id` representation — stops `target_scope` / `scope_type` / denormalized columns from drifting into three vocabularies. | Worth exploring | Applied (glossary); finish during build | §3 |
+| C7 | **Reports/export as a deep module over the same `delta()` + Scope**, not a parallel query path. Defer until Phase 7 when the report shapes are known. | Speculative | Open — grill at Phase 7 | — |
+
+**Verdict: solid for Phase 1.** The three non-negotiables now each sit behind a single deep seam — RLS behind `current_department()`/`is_executive()`/`belongs_to_my_department()`; audit behind `audit_capture()`+`resolve_scope()`; escalation behind `due_escalations()`+`Notifier`. That is precisely what makes them testable through one interface and hard to get subtly wrong in N places. No change contradicts an earlier section; the §9↔§10 and §9↔§11 invariants from rev 2 still hold.
