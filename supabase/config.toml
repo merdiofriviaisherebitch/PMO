@@ -168,7 +168,10 @@ enable_refresh_token_rotation = true
 # Requires enable_refresh_token_rotation = true.
 refresh_token_reuse_interval = 10
 # Allow/disallow new user signups to your project.
-enable_signup = true
+# PMO is a pre-provisioned governance tool: users are created by admins / the
+# service role, never self-registered (Phase 1 review M1). Live SSO (Entra) also
+# provisions via the access-token hook, not open signup.
+enable_signup = false
 # Allow/disallow anonymous sign-ins to your project.
 enable_anonymous_sign_ins = false
 # Allow/disallow testing manual linking of accounts
@@ -212,7 +215,10 @@ web3 = 30
 # secret = ""
 
 [auth.email]
-# Allow/disallow new user signups via email to your project.
+# Keep the email provider ENABLED (existing users must be able to sign in).
+# New-signup blocking is handled by the global [auth] enable_signup = false
+# above — setting THIS to false disables the email provider entirely
+# (GOTRUE_EXTERNAL_EMAIL_ENABLED=false) and breaks sign-in. (Phase 1 review M1.)
 enable_signup = true
 # If enabled, a user will be required to confirm any email change on both the old, and new email
 # addresses. If disabled, only the new email is required to confirm.
@@ -276,9 +282,10 @@ max_frequency = "5s"
 # uri = "pg-functions://postgres/auth/before-user-created-hook"
 
 # This hook runs before a token is issued and allows you to add additional claims based on the authentication method used.
-# [auth.hook.custom_access_token]
-# enabled = true
-# uri = "pg-functions://<database>/<schema>/<hook_name>"
+# PMO Control Tower: stamps user_role + department_id claims from public.users (CLAUDE.md §10, ADR 0001).
+[auth.hook.custom_access_token]
+enabled = true
+uri = "pg-functions://postgres/public/custom_access_token_hook"
 
 # Configure one of the supported SMS providers: `twilio`, `twilio_verify`, `messagebird`, `textlocal`, `vonage`.
 [auth.sms.twilio]
