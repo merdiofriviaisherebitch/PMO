@@ -35,6 +35,13 @@ export async function getAppIdentity(): Promise<AppIdentity | null> {
   const claims = data.claims as Record<string, unknown>
   const role = (claims.user_role as UserRole | null) ?? null
 
+  // A token with no app role means the user has no public.users row (not
+  // provisioned). Treat as unauthenticated so callers redirect to /login rather
+  // than rendering an authenticated-but-unscoped shell (Phase 1 review M3).
+  if (!role) {
+    return null
+  }
+
   return {
     userId: String(claims.sub ?? ""),
     email: (claims.email as string | undefined) ?? null,
