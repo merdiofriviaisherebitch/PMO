@@ -2,7 +2,7 @@
 
 Issues and PRDs for this repo live as GitHub issues in **`merdiofriviaisherebitch/PMO`**. Use the `gh` CLI for all operations.
 
-> Setup note: the repo is initialized locally with `origin` set, but it has not been pushed yet and GitHub Issues must be enabled on the remote before `to-issues` / `to-prd` can publish. Until then, these skills can draft issue bodies locally for review.
+> Status (2026-05-30): **live** — the repo is pushed to `origin/main`, GitHub Issues is enabled, and the triage labels exist. `to-issues` / `to-prd` can publish directly.
 
 ## Conventions
 

@@ -795,8 +795,8 @@ The Anthropic `pdf` / `docx` / `xlsx` skills are provided by the `anthropic-skil
 
 The mattpocock engineering skills read per-repo config from `docs/agents/` (scaffolded by `setup-matt-pocock-skills`, 2026-05-30):
 
-- **Issue tracker — GitHub.** Issues/PRDs live in `merdiofriviaisherebitch/PMO` via the `gh` CLI. Push the repo and enable GitHub Issues before `to-issues`/`to-prd` can publish; until then they draft issue bodies locally. See `docs/agents/issue-tracker.md`.
-- **Triage labels — canonical five.** `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix` (not yet created on the remote — `gh label create …` when Issues is on). See `docs/agents/triage-labels.md`.
+- **Issue tracker — GitHub.** Issues/PRDs live in `merdiofriviaisherebitch/PMO` via the `gh` CLI. Live: the repo is pushed, GitHub Issues is enabled, and `to-issues`/`to-prd` can publish directly. See `docs/agents/issue-tracker.md`.
+- **Triage labels — canonical five.** `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix` — created on the remote with colors + descriptions. See `docs/agents/triage-labels.md`.
 - **Domain docs — single-context.** Until a dedicated `CONTEXT.md` / `docs/adr/` exist, **this CLAUDE.md is the domain glossary (§3) and the decision record (§6 non-negotiables, §20 deepening decisions)** — the suite uses that vocabulary and flags conflicts against those instead of ADRs. See `docs/agents/domain.md`.
 
 ---

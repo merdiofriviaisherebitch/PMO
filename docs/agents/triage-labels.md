@@ -12,5 +12,4 @@ The skills speak in terms of five canonical triage roles. This file maps those r
 
 When a skill mentions a role (e.g. "apply the AFK-ready triage label"), use the corresponding label string from this table.
 
-> These labels do not exist on the GitHub remote yet. Create them once Issues is enabled, e.g.:
-> `gh label create needs-triage`, `gh label create ready-for-agent`, etc.
+> Status (2026-05-30): all five labels exist on `merdiofriviaisherebitch/PMO`, created with colors + descriptions. No action needed.
