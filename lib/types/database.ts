@@ -34,6 +34,60 @@ export type Database = {
   }
   public: {
     Tables: {
+      approvals: {
+        Row: {
+          actioned_at: string
+          actor_id: string | null
+          department_id: string | null
+          entity_id: string
+          entity_type: string
+          from_status: Database["public"]["Enums"]["update_status"] | null
+          id: number
+          notes: string | null
+          project_id: string | null
+          to_status: Database["public"]["Enums"]["update_status"]
+        }
+        Insert: {
+          actioned_at?: string
+          actor_id?: string | null
+          department_id?: string | null
+          entity_id: string
+          entity_type?: string
+          from_status?: Database["public"]["Enums"]["update_status"] | null
+          id?: never
+          notes?: string | null
+          project_id?: string | null
+          to_status: Database["public"]["Enums"]["update_status"]
+        }
+        Update: {
+          actioned_at?: string
+          actor_id?: string | null
+          department_id?: string | null
+          entity_id?: string
+          entity_type?: string
+          from_status?: Database["public"]["Enums"]["update_status"] | null
+          id?: never
+          notes?: string | null
+          project_id?: string | null
+          to_status?: Database["public"]["Enums"]["update_status"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "approvals_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "approvals_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       audit_log: {
         Row: {
           action: Database["public"]["Enums"]["audit_action"]
@@ -87,6 +141,116 @@ export type Database = {
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      baselines: {
+        Row: {
+          id: string
+          locked_at: string
+          locked_by: string | null
+          name: string
+          project_id: string
+          snapshot: Json
+        }
+        Insert: {
+          id?: string
+          locked_at?: string
+          locked_by?: string | null
+          name: string
+          project_id: string
+          snapshot: Json
+        }
+        Update: {
+          id?: string
+          locked_at?: string
+          locked_by?: string | null
+          name?: string
+          project_id?: string
+          snapshot?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "baselines_locked_by_fkey"
+            columns: ["locked_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "baselines_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      department_updates: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          content: Json
+          created_at: string
+          cycle_id: string
+          id: string
+          status: Database["public"]["Enums"]["update_status"]
+          submitted_at: string | null
+          submitted_by: string | null
+          workspace_id: string
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          content?: Json
+          created_at?: string
+          cycle_id: string
+          id?: string
+          status?: Database["public"]["Enums"]["update_status"]
+          submitted_at?: string | null
+          submitted_by?: string | null
+          workspace_id: string
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          content?: Json
+          created_at?: string
+          cycle_id?: string
+          id?: string
+          status?: Database["public"]["Enums"]["update_status"]
+          submitted_at?: string | null
+          submitted_by?: string | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "department_updates_approved_by_fkey"
+            columns: ["approved_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "department_updates_cycle_id_fkey"
+            columns: ["cycle_id"]
+            isOneToOne: false
+            referencedRelation: "update_cycles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "department_updates_submitted_by_fkey"
+            columns: ["submitted_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "department_updates_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "department_workspaces"
             referencedColumns: ["id"]
           },
         ]
@@ -183,6 +347,96 @@ export type Database = {
           },
         ]
       }
+      rag_status_history: {
+        Row: {
+          changed_at: string
+          changed_by: string | null
+          department_id: string | null
+          entity_id: string
+          entity_type: string
+          id: number
+          new_status: Database["public"]["Enums"]["rag_status"]
+          old_status: Database["public"]["Enums"]["rag_status"] | null
+          project_id: string | null
+        }
+        Insert: {
+          changed_at?: string
+          changed_by?: string | null
+          department_id?: string | null
+          entity_id: string
+          entity_type: string
+          id?: never
+          new_status: Database["public"]["Enums"]["rag_status"]
+          old_status?: Database["public"]["Enums"]["rag_status"] | null
+          project_id?: string | null
+        }
+        Update: {
+          changed_at?: string
+          changed_by?: string | null
+          department_id?: string | null
+          entity_id?: string
+          entity_type?: string
+          id?: never
+          new_status?: Database["public"]["Enums"]["rag_status"]
+          old_status?: Database["public"]["Enums"]["rag_status"] | null
+          project_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rag_status_history_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rag_status_history_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      revisions: {
+        Row: {
+          baseline_id: string
+          created_at: string
+          created_by: string | null
+          delta: Json
+          id: string
+        }
+        Insert: {
+          baseline_id: string
+          created_at?: string
+          created_by?: string | null
+          delta: Json
+          id?: string
+        }
+        Update: {
+          baseline_id?: string
+          created_at?: string
+          created_by?: string | null
+          delta?: Json
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "revisions_baseline_id_fkey"
+            columns: ["baseline_id"]
+            isOneToOne: false
+            referencedRelation: "baselines"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "revisions_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tasks: {
         Row: {
           assignee_id: string | null
@@ -250,6 +504,30 @@ export type Database = {
           },
         ]
       }
+      update_cycles: {
+        Row: {
+          closes_at: string
+          created_at: string
+          id: string
+          opens_at: string
+          status: string
+        }
+        Insert: {
+          closes_at: string
+          created_at?: string
+          id?: string
+          opens_at: string
+          status?: string
+        }
+        Update: {
+          closes_at?: string
+          created_at?: string
+          id?: string
+          opens_at?: string
+          status?: string
+        }
+        Relationships: []
+      }
       users: {
         Row: {
           created_at: string
@@ -299,7 +577,25 @@ export type Database = {
       }
       current_department: { Args: never; Returns: string }
       custom_access_token_hook: { Args: { event: Json }; Returns: Json }
+      is_director_or_executive: { Args: never; Returns: boolean }
       is_executive: { Args: never; Returns: boolean }
+      lock_baseline: {
+        Args: { p_name: string; p_project_id: string }
+        Returns: {
+          id: string
+          locked_at: string
+          locked_by: string | null
+          name: string
+          project_id: string
+          snapshot: Json
+        }
+        SetofOptions: {
+          from: "*"
+          to: "baselines"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       resolve_scope: {
         Args: { p_entity_id: string; p_entity_type: string }
         Returns: {

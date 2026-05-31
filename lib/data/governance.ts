@@ -14,6 +14,7 @@ import type { Database } from "@/lib/types/database"
  */
 
 type Rag = Database["public"]["Enums"]["rag_status"]
+type UpdateStatus = Database["public"]["Enums"]["update_status"]
 
 export type ProjectRow = {
   id: string
@@ -127,4 +128,94 @@ export async function listWritableWorkspaces(): Promise<
     const proj = (w.projects as { name: string } | null)?.name ?? "—"
     return { id: w.id, label: `${proj} · ${dept}` }
   })
+}
+
+// ── Phase 3: weekly update cycle + approvals ─────────────────────────────────
+
+export type UpdateCycle = {
+  id: string
+  opens_at: string
+  closes_at: string
+  status: string
+}
+
+/** The most recent open update cycle, or null if none is open. */
+export async function getOpenCycle(): Promise<UpdateCycle | null> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from("update_cycles")
+    .select("id, opens_at, closes_at, status")
+    .eq("status", "open")
+    .order("opens_at", { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (error) throw new Error(`getOpenCycle: ${error.message}`)
+  return data
+}
+
+export type DepartmentUpdateRow = {
+  id: string
+  cycle_id: string
+  workspace_id: string
+  status: UpdateStatus
+  content: { summary?: string } | null
+  submitted_at: string | null
+  approved_at: string | null
+  department_workspaces: {
+    department_id: string
+    departments: { name: string } | null
+    projects: { name: string } | null
+  } | null
+}
+
+/**
+ * Weekly updates visible to the caller (RLS-scoped) for a cycle. A member sees
+ * only their department's; a director the same; an executive sees all.
+ */
+export async function listUpdatesForCycle(
+  cycleId: string,
+): Promise<DepartmentUpdateRow[]> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from("department_updates")
+    .select(
+      "id, cycle_id, workspace_id, status, content, submitted_at, approved_at, department_workspaces(department_id, departments(name), projects(name))",
+    )
+    .eq("cycle_id", cycleId)
+    .order("created_at", { ascending: true })
+
+  if (error) throw new Error(`listUpdatesForCycle: ${error.message}`)
+  return (data ?? []) as unknown as DepartmentUpdateRow[]
+}
+
+// ── Phase 3: baselines + delta ───────────────────────────────────────────────
+
+export type BaselineRow = {
+  id: string
+  project_id: string
+  name: string
+  snapshot: unknown
+  locked_at: string
+}
+
+/** Baselines for a project the caller can see, newest first. */
+export async function listBaselines(projectId: string): Promise<BaselineRow[]> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from("baselines")
+    .select("id, project_id, name, snapshot, locked_at")
+    .eq("project_id", projectId)
+    .order("locked_at", { ascending: false })
+
+  if (error) throw new Error(`listBaselines: ${error.message}`)
+  return data ?? []
+}
+
+/** The most recent baseline for a project, or null if none locked yet. */
+export async function getLatestBaseline(
+  projectId: string,
+): Promise<BaselineRow | null> {
+  const rows = await listBaselines(projectId)
+  return rows[0] ?? null
 }

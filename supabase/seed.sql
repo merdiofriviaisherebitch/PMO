@@ -94,3 +94,22 @@ begin
     (v_ws_legal, 'Land-use permit review', 'red')
   on conflict do nothing;
 end $$;
+
+-- Phase 3: an open weekly update cycle + a draft per seeded workspace, so the
+-- /updates workflow is exercisable by hand (member submits, director approves).
+do $$
+declare
+  v_cycle uuid := 'cccccccc-0000-0000-0000-000000000001';
+  v_ws_fin uuid := 'bbbbbbbb-0000-0000-0000-0000000000f1';
+  v_ws_legal uuid := 'bbbbbbbb-0000-0000-0000-0000000000f2';
+begin
+  insert into public.update_cycles (id, opens_at, closes_at, status)
+  values (v_cycle, now() - interval '1 day', now() + interval '6 days', 'open')
+  on conflict (id) do nothing;
+
+  insert into public.department_updates (cycle_id, workspace_id, status, content)
+  values
+    (v_cycle, v_ws_fin,   'draft', '{"summary":"Capex tracking on plan."}'),
+    (v_cycle, v_ws_legal, 'draft', '{"summary":"Permit under review."}')
+  on conflict (cycle_id, workspace_id) do nothing;
+end $$;
