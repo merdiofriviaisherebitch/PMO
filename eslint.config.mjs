@@ -15,6 +15,10 @@ const eslintConfig = defineConfig([
     // Gitignored third-party clones studied read-only (CLAUDE.md §16) — never
     // linted, never imported into app code.
     "research/**",
+    // Supabase Edge Functions run on Deno (Deno globals, esm.sh/jsr imports);
+    // they have their own runtime + `deno test` and must never be type-checked
+    // or linted by the Next.js (Node) toolchain.
+    "supabase/functions/**",
   ]),
 ]);
 

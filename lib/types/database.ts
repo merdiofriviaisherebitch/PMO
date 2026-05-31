@@ -399,6 +399,207 @@ export type Database = {
         }
         Relationships: []
       }
+      escalation_events: {
+        Row: {
+          department_id: string | null
+          id: string
+          level: number
+          project_id: string | null
+          resolved_at: string | null
+          rule_id: string
+          target_entity_id: string
+          target_entity_type: string
+          triggered_at: string
+        }
+        Insert: {
+          department_id?: string | null
+          id?: string
+          level: number
+          project_id?: string | null
+          resolved_at?: string | null
+          rule_id: string
+          target_entity_id: string
+          target_entity_type: string
+          triggered_at?: string
+        }
+        Update: {
+          department_id?: string | null
+          id?: string
+          level?: number
+          project_id?: string | null
+          resolved_at?: string | null
+          rule_id?: string
+          target_entity_id?: string
+          target_entity_type?: string
+          triggered_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "escalation_events_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "escalation_events_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "escalation_events_rule_id_fkey"
+            columns: ["rule_id"]
+            isOneToOne: false
+            referencedRelation: "escalation_rules"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      escalation_rules: {
+        Row: {
+          active: boolean
+          created_at: string
+          department_id: string | null
+          id: string
+          period_bucket: Database["public"]["Enums"]["escalation_period"]
+          project_id: string | null
+          rule_type: Database["public"]["Enums"]["escalation_rule_type"]
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          department_id?: string | null
+          id?: string
+          period_bucket: Database["public"]["Enums"]["escalation_period"]
+          project_id?: string | null
+          rule_type: Database["public"]["Enums"]["escalation_rule_type"]
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          department_id?: string | null
+          id?: string
+          period_bucket?: Database["public"]["Enums"]["escalation_period"]
+          project_id?: string | null
+          rule_type?: Database["public"]["Enums"]["escalation_rule_type"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "escalation_rules_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "escalation_rules_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      escalation_steps: {
+        Row: {
+          id: string
+          level: number
+          recipient_scope: Database["public"]["Enums"]["recipient_scope"]
+          rule_id: string
+          threshold_hours: number
+        }
+        Insert: {
+          id?: string
+          level: number
+          recipient_scope: Database["public"]["Enums"]["recipient_scope"]
+          rule_id: string
+          threshold_hours: number
+        }
+        Update: {
+          id?: string
+          level?: number
+          recipient_scope?: Database["public"]["Enums"]["recipient_scope"]
+          rule_id?: string
+          threshold_hours?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "escalation_steps_rule_id_fkey"
+            columns: ["rule_id"]
+            isOneToOne: false
+            referencedRelation: "escalation_rules"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      notification_outbox: {
+        Row: {
+          attempts: number
+          body: string
+          channel: Database["public"]["Enums"]["notification_channel"]
+          created_at: string
+          dedup_key: string
+          id: string
+          last_error: string | null
+          level: number | null
+          next_attempt_at: string | null
+          recipient_id: string | null
+          rule_id: string | null
+          sent_at: string | null
+          status: Database["public"]["Enums"]["notification_status"]
+          subject: string
+        }
+        Insert: {
+          attempts?: number
+          body: string
+          channel?: Database["public"]["Enums"]["notification_channel"]
+          created_at?: string
+          dedup_key: string
+          id?: string
+          last_error?: string | null
+          level?: number | null
+          next_attempt_at?: string | null
+          recipient_id?: string | null
+          rule_id?: string | null
+          sent_at?: string | null
+          status?: Database["public"]["Enums"]["notification_status"]
+          subject: string
+        }
+        Update: {
+          attempts?: number
+          body?: string
+          channel?: Database["public"]["Enums"]["notification_channel"]
+          created_at?: string
+          dedup_key?: string
+          id?: string
+          last_error?: string | null
+          level?: number | null
+          next_attempt_at?: string | null
+          recipient_id?: string | null
+          rule_id?: string | null
+          sent_at?: string | null
+          status?: Database["public"]["Enums"]["notification_status"]
+          subject?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notification_outbox_recipient_id_fkey"
+            columns: ["recipient_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notification_outbox_rule_id_fkey"
+            columns: ["rule_id"]
+            isOneToOne: false
+            referencedRelation: "escalation_rules"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       projects: {
         Row: {
           created_at: string
@@ -685,6 +886,32 @@ export type Database = {
           workspace_id: string
         }[]
       }
+      due_escalations: {
+        Args: { p_now?: string }
+        Returns: {
+          body: string
+          dedup_key: string
+          department_id: string
+          level: number
+          period_bucket: Database["public"]["Enums"]["escalation_period"]
+          project_id: string
+          recipient_id: string
+          recipient_scope: Database["public"]["Enums"]["recipient_scope"]
+          rule_id: string
+          subject: string
+          target_entity_id: string
+          target_entity_type: string
+        }[]
+      }
+      escalation_dispatch: { Args: { p_now?: string }; Returns: number }
+      escalation_recipient: {
+        Args: {
+          p_department_id: string
+          p_member_hint?: string
+          p_scope: Database["public"]["Enums"]["recipient_scope"]
+        }
+        Returns: string
+      }
       is_director_or_executive: { Args: never; Returns: boolean }
       is_executive: { Args: never; Returns: boolean }
       lock_baseline: {
@@ -705,6 +932,14 @@ export type Database = {
         }
       }
       open_update_cycle: { Args: never; Returns: string }
+      outbox_mark_failed: {
+        Args: { p_error: string; p_id: string; p_now?: string }
+        Returns: undefined
+      }
+      outbox_send_batch: {
+        Args: { p_limit?: number; p_now?: string }
+        Returns: number
+      }
       resolve_scope: {
         Args: { p_entity_id: string; p_entity_type: string }
         Returns: {
@@ -722,7 +957,15 @@ export type Database = {
         | "approve"
         | "reject"
         | "lock"
+      escalation_period: "iso_week" | "day"
+      escalation_rule_type:
+        | "late_update"
+        | "red_lingering"
+        | "blocked_dependency"
+      notification_channel: "email" | "teams"
+      notification_status: "queued" | "sent" | "failed"
       rag_status: "green" | "amber" | "red"
+      recipient_scope: "member" | "director" | "executive"
       update_status: "draft" | "pending" | "approved" | "rejected"
       user_role: "executive" | "director" | "member" | "viewer"
     }
@@ -856,7 +1099,16 @@ export const Constants = {
   public: {
     Enums: {
       audit_action: ["create", "update", "delete", "approve", "reject", "lock"],
+      escalation_period: ["iso_week", "day"],
+      escalation_rule_type: [
+        "late_update",
+        "red_lingering",
+        "blocked_dependency",
+      ],
+      notification_channel: ["email", "teams"],
+      notification_status: ["queued", "sent", "failed"],
       rag_status: ["green", "amber", "red"],
+      recipient_scope: ["member", "director", "executive"],
       update_status: ["draft", "pending", "approved", "rejected"],
       user_role: ["executive", "director", "member", "viewer"],
     },
