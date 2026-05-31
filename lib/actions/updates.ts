@@ -25,11 +25,16 @@ export async function startDraft(formData: FormData): Promise<void> {
   if (!cycleId || !workspaceId) return
 
   const supabase = await createClient()
-  await supabase
+  const { error } = await supabase
     .from("department_updates")
     .insert({ cycle_id: cycleId, workspace_id: workspaceId, status: "draft" })
-  // On unique-violation (draft exists) or RLS denial this is a no-op; the page
-  // re-renders from the RLS-scoped read either way.
+
+  // A unique-violation (a draft already exists for this cycle×workspace) is the
+  // one benign no-op. ANY other error must NOT be swallowed (silent failures are
+  // a non-negotiable, CLAUDE.md §6) — log it server-side so it's diagnosable.
+  if (error && error.code !== "23505") {
+    console.error("[startDraft] unexpected error:", error.message)
+  }
   revalidatePath("/updates")
 }
 
@@ -43,15 +48,27 @@ export async function saveDraftContent(
   if (!id) return { ok: false, errors: { _form: "Missing update id." } }
 
   const supabase = await createClient()
-  const { error } = await supabase
+  // Content is editable only while draft/rejected. The transition guard
+  // (migration 0019) enforces this at the DB layer; we also scope the UPDATE to
+  // those statuses so a tampered request on a pending/approved row matches 0
+  // rows instead of erroring — defense in depth + clearer outcome.
+  const { data, error } = await supabase
     .from("department_updates")
     .update({ content: { summary } })
     .eq("id", id)
+    .in("status", ["draft", "rejected"])
+    .select("id")
 
   if (error) {
     return {
       ok: false,
       errors: { _form: rlsAwareMessage(error.message, "edit this update") },
+    }
+  }
+  if (!data || data.length === 0) {
+    return {
+      ok: false,
+      errors: { _form: "This update can no longer be edited." },
     }
   }
   revalidatePath("/updates")

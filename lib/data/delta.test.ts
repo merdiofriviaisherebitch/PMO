@@ -84,6 +84,37 @@ describe("computeDelta", () => {
     })
   })
 
+  it("flags a due date that was added after baseline (not a day-count)", () => {
+    const base = snapshot([
+      { task_id: "t1", title: "A", rag_status: "green", start_date: null, due_date: null },
+    ])
+    const cur = current([
+      { task_id: "t1", title: "A", rag_status: "green", start_date: null, due_date: "2026-03-01" },
+    ])
+    const d = computeDelta(base, cur)
+    expect(d.scheduleVariances).toHaveLength(1)
+    expect(d.scheduleVariances[0]).toMatchObject({
+      task_id: "t1",
+      dueDateChange: "added",
+      dueDateVarianceDays: null,
+    })
+  })
+
+  it("flags a start date that was removed after baseline", () => {
+    const base = snapshot([
+      { task_id: "t1", title: "A", rag_status: "green", start_date: "2026-01-01", due_date: null },
+    ])
+    const cur = current([
+      { task_id: "t1", title: "A", rag_status: "green", start_date: null, due_date: null },
+    ])
+    const d = computeDelta(base, cur)
+    expect(d.scheduleVariances).toHaveLength(1)
+    expect(d.scheduleVariances[0]).toMatchObject({
+      task_id: "t1",
+      startDateChange: "removed",
+    })
+  })
+
   it("detects a RAG change on an existing task", () => {
     const base = snapshot([
       { task_id: "t1", title: "A", rag_status: "green", start_date: null, due_date: null },

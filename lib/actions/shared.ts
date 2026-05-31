@@ -23,5 +23,16 @@ export function rlsAwareMessage(raw: string, action: string): string {
   ) {
     return `You don't have permission to ${action}.`
   }
-  return raw
+  // Transition/role guards (migration 0017/0019) raise check_violation with a
+  // human-readable message. Surface those verbatim (they're written for users:
+  // "Only a director or executive may approve an update"), but strip anything
+  // that looks like a raw SQL/internal error.
+  if (
+    raw.startsWith("Only a") ||
+    raw.startsWith("Illegal update transition") ||
+    raw.startsWith("This update is")
+  ) {
+    return raw
+  }
+  return `Couldn't ${action} — please try again.`
 }

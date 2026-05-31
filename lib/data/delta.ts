@@ -47,6 +47,10 @@ export type ScheduleVariance = {
   title: string
   startDateVarianceDays: number | null
   dueDateVarianceDays: number | null
+  /** A date that was absent at baseline and is now set (or vice-versa) — real
+   * plan drift that a day-count can't express. */
+  startDateChange: "added" | "removed" | null
+  dueDateChange: "added" | "removed" | null
 }
 
 export type RagChange = {
@@ -83,6 +87,16 @@ function dayVariance(baseline: string | null, current: string | null): number | 
   return Math.round((c - b) / MS_PER_DAY)
 }
 
+/** A date appearing/disappearing between baseline and current (not a day-count). */
+function dateChange(
+  baseline: string | null,
+  current: string | null,
+): "added" | "removed" | null {
+  if (!baseline && current) return "added"
+  if (baseline && !current) return "removed"
+  return null
+}
+
 export function computeDelta(
   baseline: BaselineSnapshot,
   current: CurrentState,
@@ -110,12 +124,23 @@ export function computeDelta(
 
     const startVar = dayVariance(base.start_date, cur.start_date)
     const dueVar = dayVariance(base.due_date, cur.due_date)
-    if ((startVar ?? 0) !== 0 || (dueVar ?? 0) !== 0) {
+    const startChange = dateChange(base.start_date, cur.start_date)
+    const dueChange = dateChange(base.due_date, cur.due_date)
+    // Report if a day-count moved OR a date was added/removed (the latter is
+    // plan drift a day-count silently misses — H2 review fix).
+    if (
+      (startVar ?? 0) !== 0 ||
+      (dueVar ?? 0) !== 0 ||
+      startChange !== null ||
+      dueChange !== null
+    ) {
       scheduleVariances.push({
         task_id: id,
         title: cur.title,
         startDateVarianceDays: startVar,
         dueDateVarianceDays: dueVar,
+        startDateChange: startChange,
+        dueDateChange: dueChange,
       })
     }
 
