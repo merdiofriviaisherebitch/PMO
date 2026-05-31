@@ -387,6 +387,13 @@ deno_version = 2
 # [edge_runtime.secrets]
 # secret_key = "env(SECRET_VALUE)"
 
+# Escalation delivery worker (CLAUDE.md §8, §11). It authenticates the incoming
+# pg_net call with its own shared secret (ESCALATION_FUNCTION_SECRET), NOT a
+# Supabase user JWT — so disable the platform JWT gate, or every cron call is
+# rejected before our handler runs.
+[functions.escalation-sender]
+verify_jwt = false
+
 [analytics]
 enabled = true
 port = 54327

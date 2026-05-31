@@ -16,10 +16,21 @@ import {
   getCycleStatus,
   getRagRollup,
 } from "@/lib/data/dashboard"
+import { getOpenEscalations, type EscalationKind } from "@/lib/data/escalations"
 import { listProjects } from "@/lib/data/governance"
 
 const fmt = (n: number) =>
   new Intl.NumberFormat("en-US", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n)
+
+// The governance timeline is anchored to Europe/Budapest (§18 Q2); build the
+// formatter once at module scope rather than per escalation row.
+const escalationDateFmt = new Intl.DateTimeFormat("en-GB", {
+  day: "2-digit",
+  month: "short",
+  hour: "2-digit",
+  minute: "2-digit",
+  timeZone: "Europe/Budapest",
+})
 
 /**
  * Executive / department dashboard (CLAUDE.md §5 module 10). One page for both
@@ -32,11 +43,12 @@ export default async function DashboardPage() {
   const identity = await getAppIdentity()
 
   // Parallel, independent aggregations — no request waterfall.
-  const [rag, budget, cycle, projects] = await Promise.all([
+  const [rag, budget, cycle, projects, escalations] = await Promise.all([
     getRagRollup(),
     getBudgetSummary(),
     getCycleStatus(),
     listProjects(),
+    getOpenEscalations(),
   ])
 
   const projectName = new Map(projects.map((p) => [p.id, p.name]))
@@ -107,30 +119,86 @@ export default async function DashboardPage() {
         </Card>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Recent projects</CardTitle>
-          <CardDescription>Newest first · {projects.length} visible</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          {projects.length === 0 ? (
-            <p className="text-muted-foreground text-sm">No projects visible.</p>
-          ) : (
-            projects.slice(0, 6).map((p) => (
-              <Link
-                key={p.id}
-                href={`/projects/${p.id}`}
-                className="hover:bg-muted/50 flex items-center justify-between rounded-md border px-4 py-2.5"
-              >
-                <span className="font-medium">{p.name}</span>
-                <span className="text-muted-foreground text-sm capitalize">{p.status}</span>
-              </Link>
-            ))
-          )}
-        </CardContent>
-      </Card>
+      <div className="grid gap-4 lg:grid-cols-2">
+        {/* Accountability: who's overdue and how far up the ladder it has gone. */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Open escalations</CardTitle>
+            <CardDescription>
+              {escalations.total === 0 ? "None — all clear" : `${escalations.total} unresolved`}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {escalations.items.length === 0 ? (
+              <p className="text-muted-foreground text-sm">No open escalations.</p>
+            ) : (
+              escalations.items.map((e) => (
+                <div
+                  key={e.id}
+                  className="flex items-center justify-between rounded-md border px-4 py-2.5"
+                >
+                  <div className="flex items-center gap-3">
+                    <LevelChip level={e.level} />
+                    <span className="text-sm font-medium">{kindLabel(e.kind)}</span>
+                    {e.departmentName && (
+                      <span className="text-muted-foreground text-sm">· {e.departmentName}</span>
+                    )}
+                  </div>
+                  <span className="text-muted-foreground text-xs">{fmtDate(e.triggeredAt)}</span>
+                </div>
+              ))
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Recent projects</CardTitle>
+            <CardDescription>Newest first · {projects.length} visible</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {projects.length === 0 ? (
+              <p className="text-muted-foreground text-sm">No projects visible.</p>
+            ) : (
+              projects.slice(0, 6).map((p) => (
+                <Link
+                  key={p.id}
+                  href={`/projects/${p.id}`}
+                  className="hover:bg-muted/50 flex items-center justify-between rounded-md border px-4 py-2.5"
+                >
+                  <span className="font-medium">{p.name}</span>
+                  <span className="text-muted-foreground text-sm capitalize">{p.status}</span>
+                </Link>
+              ))
+            )}
+          </CardContent>
+        </Card>
+      </div>
     </div>
   )
+}
+
+/** Ladder rung → who it has reached, coloured by severity. */
+function LevelChip({ level }: { level: number }) {
+  const map: Record<number, { label: string; cls: string }> = {
+    1: { label: "L1 · Member", cls: "bg-amber-100 text-amber-800" },
+    2: { label: "L2 · Director", cls: "bg-orange-100 text-orange-800" },
+    3: { label: "L3 · Executive", cls: "bg-red-100 text-red-800" },
+  }
+  const m = map[level] ?? { label: `L${level}`, cls: "bg-muted text-muted-foreground" }
+  return (
+    <span className={`rounded px-2 py-0.5 text-xs font-medium ${m.cls}`}>{m.label}</span>
+  )
+}
+
+function kindLabel(kind: EscalationKind): string {
+  if (kind === "late_update") return "Late update"
+  if (kind === "red_item") return "Lingering red item"
+  return "Escalation"
+}
+
+function fmtDate(iso: string): string {
+  return escalationDateFmt.format(new Date(iso))
 }
 
 function Kpi({

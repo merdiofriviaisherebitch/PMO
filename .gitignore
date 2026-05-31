@@ -17,6 +17,9 @@ node_modules/
 *.tsbuildinfo
 /coverage/
 *.pem
+# Deno (Supabase Edge Functions) lockfile — imports are version-pinned by
+# specifier; the root-level lock is a transient dev artifact in this Bun/Next repo.
+deno.lock
 
 # OS
 .DS_Store
