@@ -944,6 +944,7 @@ export type Database = {
           workspace_id: string
         }[]
       }
+      can_write: { Args: never; Returns: boolean }
       close_update_cycle: { Args: never; Returns: number }
       cumulative_threshold: {
         Args: { p_level: number; p_rule_id: string }
