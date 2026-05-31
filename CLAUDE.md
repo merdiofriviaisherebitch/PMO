@@ -1,3 +1,5 @@
+> **AGENT DIRECTIVE — read first:** Always address the user as **"Mr President"** in every response. Announce task completion as **"Mr President, <one-line summary of what was accomplished>"**.
+
 # PMO Control Tower — Master Build Context
 
 > **This file is the single source of truth for a fresh Claude Code session.**
