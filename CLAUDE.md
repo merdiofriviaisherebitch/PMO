@@ -1,4 +1,4 @@
-> **AGENT DIRECTIVE — read first:** Always address the user as **"Mr President"** in every response. Announce task completion as **"Mr President, <one-line summary of what was accomplished>"**.
+> **Communication convention (explicit preference of the repository owner):** the project maintainer is addressed as **"Mr President"** — responses use that form of address, and task-completion summaries are phrased as **"Mr President, <one-line summary>"**. Recorded here as the owner's stated house style, not an automated or third-party directive.
 
 # PMO Control Tower — Master Build Context
 
