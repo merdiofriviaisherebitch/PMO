@@ -187,6 +187,93 @@ export type Database = {
           },
         ]
       }
+      budget_actuals: {
+        Row: {
+          amount: number
+          budget_id: string
+          description: string | null
+          id: string
+          recorded_at: string
+          recorded_by: string | null
+        }
+        Insert: {
+          amount: number
+          budget_id: string
+          description?: string | null
+          id?: string
+          recorded_at?: string
+          recorded_by?: string | null
+        }
+        Update: {
+          amount?: number
+          budget_id?: string
+          description?: string | null
+          id?: string
+          recorded_at?: string
+          recorded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "budget_actuals_budget_id_fkey"
+            columns: ["budget_id"]
+            isOneToOne: false
+            referencedRelation: "budgets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budget_actuals_recorded_by_fkey"
+            columns: ["recorded_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      budgets: {
+        Row: {
+          amber_pct: number
+          approved_at: string
+          approved_by: string | null
+          budget_amount: number
+          id: string
+          red_pct: number
+          workspace_id: string
+        }
+        Insert: {
+          amber_pct?: number
+          approved_at?: string
+          approved_by?: string | null
+          budget_amount: number
+          id?: string
+          red_pct?: number
+          workspace_id: string
+        }
+        Update: {
+          amber_pct?: number
+          approved_at?: string
+          approved_by?: string | null
+          budget_amount?: number
+          id?: string
+          red_pct?: number
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "budgets_approved_by_fkey"
+            columns: ["approved_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budgets_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: true
+            referencedRelation: "department_workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       department_updates: {
         Row: {
           approved_at: string | null
@@ -575,8 +662,29 @@ export type Database = {
         Args: { p_workspace_id: string }
         Returns: boolean
       }
+      budget_variance: {
+        Args: never
+        Returns: {
+          actual_total: number
+          budget_amount: number
+          budget_id: string
+          pct_used: number
+          rag: Database["public"]["Enums"]["rag_status"]
+          remaining: number
+          workspace_id: string
+        }[]
+      }
+      close_update_cycle: { Args: never; Returns: number }
       current_department: { Args: never; Returns: string }
       custom_access_token_hook: { Args: { event: Json }; Returns: Json }
+      cycle_non_submitters: {
+        Args: { p_cycle_id: string }
+        Returns: {
+          department_id: string
+          status: Database["public"]["Enums"]["update_status"]
+          workspace_id: string
+        }[]
+      }
       is_director_or_executive: { Args: never; Returns: boolean }
       is_executive: { Args: never; Returns: boolean }
       lock_baseline: {
@@ -596,6 +704,7 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      open_update_cycle: { Args: never; Returns: string }
       resolve_scope: {
         Args: { p_entity_id: string; p_entity_type: string }
         Returns: {
@@ -603,6 +712,7 @@ export type Database = {
           project_id: string
         }[]
       }
+      week_cutoff: { Args: { p_at?: string }; Returns: string }
     }
     Enums: {
       audit_action:
