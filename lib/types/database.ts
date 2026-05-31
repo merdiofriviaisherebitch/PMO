@@ -755,6 +755,67 @@ export type Database = {
           },
         ]
       }
+      reports: {
+        Row: {
+          department_id: string | null
+          generated_at: string
+          generated_by: string | null
+          id: string
+          pdf_path: string
+          period: Database["public"]["Enums"]["report_period"]
+          period_end: string
+          period_start: string
+          project_id: string | null
+          xlsx_path: string
+        }
+        Insert: {
+          department_id?: string | null
+          generated_at?: string
+          generated_by?: string | null
+          id?: string
+          pdf_path: string
+          period: Database["public"]["Enums"]["report_period"]
+          period_end: string
+          period_start: string
+          project_id?: string | null
+          xlsx_path: string
+        }
+        Update: {
+          department_id?: string | null
+          generated_at?: string
+          generated_by?: string | null
+          id?: string
+          pdf_path?: string
+          period?: Database["public"]["Enums"]["report_period"]
+          period_end?: string
+          period_start?: string
+          project_id?: string | null
+          xlsx_path?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reports_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reports_generated_by_fkey"
+            columns: ["generated_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reports_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       revisions: {
         Row: {
           baseline_id: string
@@ -1021,6 +1082,7 @@ export type Database = {
         Args: { p_limit?: number; p_now?: string }
         Returns: number
       }
+      report_dispatch: { Args: { p_period: string }; Returns: undefined }
       resolve_escalations: { Args: { p_now: string }; Returns: undefined }
       resolve_scope: {
         Args: { p_entity_id: string; p_entity_type: string }
@@ -1050,6 +1112,7 @@ export type Database = {
       rag_status: "green" | "amber" | "red"
       recipient_scope: "member" | "director" | "executive"
       relation_type: "blocks" | "precedes" | "relates"
+      report_period: "weekly" | "monthly"
       update_status: "draft" | "pending" | "approved" | "rejected"
       user_role: "executive" | "director" | "member" | "viewer"
     }
@@ -1194,6 +1257,7 @@ export const Constants = {
       rag_status: ["green", "amber", "red"],
       recipient_scope: ["member", "director", "executive"],
       relation_type: ["blocks", "precedes", "relates"],
+      report_period: ["weekly", "monthly"],
       update_status: ["draft", "pending", "approved", "rejected"],
       user_role: ["executive", "director", "member", "viewer"],
     },

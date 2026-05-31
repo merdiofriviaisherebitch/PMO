@@ -39,6 +39,7 @@ export default async function AppLayout({
     { href: "/tasks", label: "Tasks" },
     { href: "/dependencies", label: "Dependencies" },
     { href: "/updates", label: "Updates" },
+    { href: "/reports", label: "Reports" },
   ]
 
   return (
