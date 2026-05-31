@@ -10,6 +10,7 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { RagBadge } from "@/components/governance/rag-badge"
 import { BaselineForm } from "@/components/governance/baseline-form"
+import { BudgetControls } from "@/components/governance/budget-controls"
 import { getAppIdentity } from "@/lib/auth/claims"
 import {
   getLatestBaseline,
@@ -17,11 +18,19 @@ import {
   listTasks,
   listWorkspacesForProject,
 } from "@/lib/data/governance"
+import { getProjectBudgets } from "@/lib/data/dashboard"
 import {
   computeDelta,
   type BaselineSnapshot,
   type CurrentState,
 } from "@/lib/data/delta"
+
+const fmtEur = (n: number) =>
+  new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "EUR",
+    maximumFractionDigits: 0,
+  }).format(n)
 
 /**
  * Project detail: the project, its department workspaces (RLS-scoped), the
@@ -41,6 +50,12 @@ export default async function ProjectDetailPage({
     listWorkspacesForProject(id),
     getLatestBaseline(id),
   ])
+  // Budget variance for the visible workspaces (RLS-scoped via budget_variance()).
+  const budgetLines = await getProjectBudgets(workspaces.map((w) => w.id))
+  const budgetByWorkspace = new Map(budgetLines.map((b) => [b.workspace_id, b]))
+  // A director/exec of the owning department may set the budget figure.
+  const canSetBudget =
+    identity?.isExecutive || identity?.role === "director"
   // Fetch each workspace's tasks in parallel, then render synchronously —
   // an async callback inside .map() would yield Promises React can't render.
   const tasksByWorkspace = new Map(
@@ -105,20 +120,51 @@ export default async function ProjectDetailPage({
                       {tasks.length} task{tasks.length === 1 ? "" : "s"}
                     </CardDescription>
                   </CardHeader>
-                  <CardContent className="space-y-1.5">
-                    {tasks.length === 0 ? (
-                      <p className="text-muted-foreground text-sm">No tasks yet.</p>
-                    ) : (
-                      tasks.map((t) => (
-                        <div
-                          key={t.id}
-                          className="flex items-center justify-between rounded-md border px-3 py-2 text-sm"
-                        >
-                          <span>{t.title}</span>
-                          <RagBadge status={t.rag_status} />
-                        </div>
-                      ))
-                    )}
+                  <CardContent className="space-y-3">
+                    <div className="space-y-1.5">
+                      {tasks.length === 0 ? (
+                        <p className="text-muted-foreground text-sm">No tasks yet.</p>
+                      ) : (
+                        tasks.map((t) => (
+                          <div
+                            key={t.id}
+                            className="flex items-center justify-between rounded-md border px-3 py-2 text-sm"
+                          >
+                            <span>{t.title}</span>
+                            <RagBadge status={t.rag_status} />
+                          </div>
+                        ))
+                      )}
+                    </div>
+
+                    {/* Budget (CLAUDE.md §5 module 9) */}
+                    <div className="border-t pt-3">
+                      {(() => {
+                        const b = budgetByWorkspace.get(w.id)
+                        return (
+                          <>
+                            <div className="mb-2 flex items-center justify-between text-sm">
+                              <span className="text-muted-foreground">Budget</span>
+                              {b ? (
+                                <span className="flex items-center gap-2">
+                                  <span>
+                                    {fmtEur(b.actual_total)} / {fmtEur(b.budget_amount)}
+                                  </span>
+                                  <RagBadge status={b.rag} />
+                                </span>
+                              ) : (
+                                <span className="text-muted-foreground">not set</span>
+                              )}
+                            </div>
+                            <BudgetControls
+                              workspaceId={w.id}
+                              budgetId={b?.budget_id ?? null}
+                              canSetBudget={!!canSetBudget}
+                            />
+                          </>
+                        )
+                      })()}
+                    </div>
                   </CardContent>
                 </Card>
               )
