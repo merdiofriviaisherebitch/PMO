@@ -42,8 +42,26 @@ export const workspaceRagSchema = z.object({
   ragStatus: rag,
 })
 
+// ── Phase 6: dependencies ────────────────────────────────────────────────────
+// RLS is still the security boundary (a member can only create an edge whose both
+// endpoints are in their department — ADR 0002); this schema is integrity + UX:
+// it pins the relation to the enum and rejects a self-edge before the DB does.
+const relation = z.enum(["blocks", "precedes", "relates"])
+
+export const dependencyCreateSchema = z
+  .object({
+    sourceTaskId: z.guid("Pick a source task"),
+    targetTaskId: z.guid("Pick a target task"),
+    relationType: relation.default("blocks"),
+  })
+  .refine((d) => d.sourceTaskId !== d.targetTaskId, {
+    message: "A dependency must connect two different tasks",
+    path: ["targetTaskId"],
+  })
+
 export type ProjectCreateInput = z.infer<typeof projectCreateSchema>
 export type TaskCreateInput = z.infer<typeof taskCreateSchema>
+export type DependencyCreateInput = z.infer<typeof dependencyCreateSchema>
 
 /** Normalize a zod error into a flat { field: message } map for form display. */
 export function fieldErrors(error: z.ZodError): Record<string, string> {

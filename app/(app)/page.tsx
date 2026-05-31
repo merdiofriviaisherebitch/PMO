@@ -194,6 +194,7 @@ function LevelChip({ level }: { level: number }) {
 function kindLabel(kind: EscalationKind): string {
   if (kind === "late_update") return "Late update"
   if (kind === "red_item") return "Lingering red item"
+  if (kind === "blocked_dependency") return "Blocked dependency"
   return "Escalation"
 }
 

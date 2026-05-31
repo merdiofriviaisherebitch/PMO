@@ -399,6 +399,75 @@ export type Database = {
         }
         Relationships: []
       }
+      dependencies: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          relation_type: Database["public"]["Enums"]["relation_type"]
+          source_department_id: string | null
+          source_task_id: string
+          target_department_id: string | null
+          target_task_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          relation_type?: Database["public"]["Enums"]["relation_type"]
+          source_department_id?: string | null
+          source_task_id: string
+          target_department_id?: string | null
+          target_task_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          relation_type?: Database["public"]["Enums"]["relation_type"]
+          source_department_id?: string | null
+          source_task_id?: string
+          target_department_id?: string | null
+          target_task_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dependencies_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dependencies_source_department_id_fkey"
+            columns: ["source_department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dependencies_source_task_id_fkey"
+            columns: ["source_task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dependencies_target_department_id_fkey"
+            columns: ["target_department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dependencies_target_task_id_fkey"
+            columns: ["target_task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       escalation_events: {
         Row: {
           department_id: string | null
@@ -876,6 +945,10 @@ export type Database = {
         }[]
       }
       close_update_cycle: { Args: never; Returns: number }
+      cumulative_threshold: {
+        Args: { p_level: number; p_rule_id: string }
+        Returns: string
+      }
       current_department: { Args: never; Returns: string }
       custom_access_token_hook: { Args: { event: Json }; Returns: Json }
       cycle_non_submitters: {
@@ -904,6 +977,13 @@ export type Database = {
         }[]
       }
       escalation_dispatch: { Args: { p_now?: string }; Returns: number }
+      escalation_period_token: {
+        Args: {
+          p_at: string
+          p_bucket: Database["public"]["Enums"]["escalation_period"]
+        }
+        Returns: string
+      }
       escalation_recipient: {
         Args: {
           p_department_id: string
@@ -940,6 +1020,7 @@ export type Database = {
         Args: { p_limit?: number; p_now?: string }
         Returns: number
       }
+      resolve_escalations: { Args: { p_now: string }; Returns: undefined }
       resolve_scope: {
         Args: { p_entity_id: string; p_entity_type: string }
         Returns: {
@@ -947,6 +1028,7 @@ export type Database = {
           project_id: string
         }[]
       }
+      task_in_my_department: { Args: { p_task_id: string }; Returns: boolean }
       week_cutoff: { Args: { p_at?: string }; Returns: string }
     }
     Enums: {
@@ -966,6 +1048,7 @@ export type Database = {
       notification_status: "queued" | "sent" | "failed"
       rag_status: "green" | "amber" | "red"
       recipient_scope: "member" | "director" | "executive"
+      relation_type: "blocks" | "precedes" | "relates"
       update_status: "draft" | "pending" | "approved" | "rejected"
       user_role: "executive" | "director" | "member" | "viewer"
     }
@@ -1109,6 +1192,7 @@ export const Constants = {
       notification_status: ["queued", "sent", "failed"],
       rag_status: ["green", "amber", "red"],
       recipient_scope: ["member", "director", "executive"],
+      relation_type: ["blocks", "precedes", "relates"],
       update_status: ["draft", "pending", "approved", "rejected"],
       user_role: ["executive", "director", "member", "viewer"],
     },

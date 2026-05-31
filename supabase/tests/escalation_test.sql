@@ -23,6 +23,7 @@ truncate table public.escalation_rules    cascade;
 truncate table public.rag_status_history  restart identity cascade;
 truncate table public.department_updates  cascade;
 truncate table public.update_cycles       cascade;
+truncate table public.dependencies        cascade;
 truncate table public.tasks               cascade;
 truncate table public.department_workspaces cascade;
 truncate table public.projects            cascade;
@@ -261,6 +262,83 @@ begin
   perform pg_temp.assert(v_cnt = 2, format('red_lingering ladder: L1+L2 both due once threshold elapses (got %s)', v_cnt));
   perform pg_temp.assert(v_l1 = 1 and v_l2 = 1,
     format('red_lingering ladder: exactly one of each level, not collapsed (L1=%s L2=%s)', v_l1, v_l2));
+end $$;
+
+-- ── blocked_dependency fixtures (Phase 6 third branch) ───────────────────────
+-- Reuse the red task (v_task, red since T-50h) as the BLOCKER (source). Add a
+-- green TARGET task in the same Finance workspace and a 'blocks' edge between them,
+-- plus a blocked_dependency rule (L1 director @48h, L2 exec @+48h, daily re-nag) —
+-- the SAME ladder shape as red_lingering, so at T (50h red) exactly L1 is due.
+do $$
+declare
+  v_ws     uuid := '00000000-0000-0000-0000-0000000005b1';
+  v_task   uuid := '00000000-0000-0000-0000-0000000005f1';   -- blocker (red since T-50h)
+  v_target uuid := '00000000-0000-0000-0000-0000000005f2';   -- blocked (green)
+  v_dep    uuid := '00000000-0000-0000-0000-0000000005de';
+  v_brule  uuid := '00000000-0000-0000-0000-0000000005ac';
+begin
+  insert into public.tasks (id, workspace_id, title, rag_status)
+  values (v_target, v_ws, 'Escalation: blocked downstream task', 'green');
+  insert into public.dependencies (id, source_task_id, target_task_id, relation_type)
+  values (v_dep, v_task, v_target, 'blocks');
+
+  insert into public.escalation_rules (id, rule_type, period_bucket, active)
+  values (v_brule, 'blocked_dependency', 'day', true);
+  insert into public.escalation_steps (rule_id, level, threshold_hours, recipient_scope) values
+    (v_brule, 1, 48, 'director'),
+    (v_brule, 2, 48, 'executive');
+end $$;
+
+-- ── TEST 10: blocked_dependency — a 'blocks' edge with a 50h-red blocker is due ─
+-- The event targets the DEPENDENCY and is accountable to the BLOCKED (target)
+-- department's director.
+do $$
+declare v_dep uuid := '00000000-0000-0000-0000-0000000005de';
+        v_fin uuid; v_cnt int; v_lvl int; v_rcpt uuid; v_is_dir boolean;
+begin
+  select id into v_fin from public.departments where name = 'Finance';
+  select count(*) into v_cnt from public.due_escalations('2026-05-29 12:00:00+00')
+    where target_entity_id = v_dep and target_entity_type = 'dependency';
+  select level, recipient_id into v_lvl, v_rcpt from public.due_escalations('2026-05-29 12:00:00+00')
+    where target_entity_id = v_dep and target_entity_type = 'dependency';
+  select exists (
+    select 1 from public.users u where u.id = v_rcpt and u.department_id = v_fin and u.role = 'director'
+  ) into v_is_dir;
+  perform pg_temp.assert(v_cnt = 1, format('blocked_dependency: exactly L1 due for a 50h-red blocker (got %s)', v_cnt));
+  perform pg_temp.assert(v_lvl = 1, format('blocked_dependency: due step is level 1 (got %s)', v_lvl));
+  perform pg_temp.assert(v_is_dir, 'blocked_dependency: recipient is a director of the BLOCKED department');
+end $$;
+
+-- ── TEST 11: when the blocker recovers, it is no longer due and the event resolves ─
+do $$
+declare v_dep uuid := '00000000-0000-0000-0000-0000000005de';
+        v_task uuid := '00000000-0000-0000-0000-0000000005f1';
+        v_open_before int; v_due int; v_open_after int;
+begin
+  -- Open the event first (dispatch at T), then confirm exactly one is open.
+  perform public.escalation_dispatch('2026-05-29 12:00:00+00');
+  select count(*) into v_open_before from public.escalation_events
+    where target_entity_id = v_dep and target_entity_type = 'dependency' and resolved_at is null;
+
+  -- The blocker recovers from red → the block clears.
+  update public.tasks set rag_status = 'green' where id = v_task;
+
+  select count(*) into v_due from public.due_escalations('2026-05-29 12:00:00+00')
+    where target_entity_id = v_dep and target_entity_type = 'dependency';
+  perform public.escalation_dispatch('2026-05-29 12:00:00+00');   -- runs resolve_escalations
+  select count(*) into v_open_after from public.escalation_events
+    where target_entity_id = v_dep and target_entity_type = 'dependency' and resolved_at is null;
+
+  perform pg_temp.assert(v_open_before = 1, format('blocked_dependency: one open event after dispatch (got %s)', v_open_before));
+  perform pg_temp.assert(v_due = 0, format('blocked_dependency: a recovered blocker is no longer due (got %s)', v_due));
+  perform pg_temp.assert(v_open_after = 0, format('blocked_dependency: its open event is resolved (got %s)', v_open_after));
+
+  -- A later dispatch tick must NOT re-open the resolved event (resolve is stable).
+  perform public.escalation_dispatch('2026-05-29 13:00:00+00');   -- T + 1h
+  select count(*) into v_open_after from public.escalation_events
+    where target_entity_id = v_dep and target_entity_type = 'dependency' and resolved_at is null;
+  perform pg_temp.assert(v_open_after = 0,
+    format('blocked_dependency: a later dispatch does not re-open the resolved event (got %s)', v_open_after));
 end $$;
 
 rollback;

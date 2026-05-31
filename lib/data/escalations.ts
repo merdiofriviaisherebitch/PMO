@@ -14,7 +14,11 @@ import { createClient } from "@/lib/supabase/server"
  * and avoids widening the rules policy.
  */
 
-export type EscalationKind = "late_update" | "red_item" | "other"
+export type EscalationKind =
+  | "late_update"
+  | "red_item"
+  | "blocked_dependency"
+  | "other"
 
 export type OpenEscalation = {
   id: string
@@ -27,6 +31,10 @@ export type OpenEscalation = {
 function kindOf(targetEntityType: string): EscalationKind {
   if (targetEntityType === "department_update") return "late_update"
   if (targetEntityType === "task") return "red_item"
+  // Phase 6: a blocked_dependency event targets the dependency edge (0027). We
+  // extend the kind mapping rather than widen the exec-only escalation_rules
+  // SELECT policy — a director derives "kind" from target_entity_type alone.
+  if (targetEntityType === "dependency") return "blocked_dependency"
   return "other"
 }
 
