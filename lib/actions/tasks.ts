@@ -3,26 +3,14 @@
 import { revalidatePath } from "next/cache"
 
 import { createClient } from "@/lib/supabase/server"
+import { type ActionResult, rlsAwareMessage } from "@/lib/actions/shared"
 import {
   fieldErrors,
   taskCreateSchema,
   taskUpdateSchema,
 } from "@/lib/validation"
 
-export type ActionResult =
-  | { ok: true }
-  | { ok: false; errors: Record<string, string> }
-
-function rlsAwareMessage(raw: string, action: string): string {
-  if (
-    raw.includes("row-level security") ||
-    raw.includes("violates row-level") ||
-    raw.includes("permission denied")
-  ) {
-    return `You don't have permission to ${action}.`
-  }
-  return raw
-}
+export type { ActionResult }
 
 /**
  * Create a task. RLS (migration 0010) enforces the task lands in a workspace the
@@ -109,7 +97,20 @@ export async function deleteTask(formData: FormData): Promise<void> {
   if (!id) return
 
   const supabase = await createClient()
-  // RLS ensures only own-department (or exec) deletes succeed.
-  await supabase.from("tasks").delete().eq("id", id)
+  // RLS ensures only own-department (or exec) deletes succeed. In the normal UI
+  // the task list is RLS-scoped, so a user only ever sees ids they may delete;
+  // a tampered foreign id simply affects 0 rows (no error, no data change). We
+  // request the count so a future UI can distinguish blocked from done.
+  const { count } = await supabase
+    .from("tasks")
+    .delete({ count: "exact" })
+    .eq("id", id)
+
+  if (count === 0) {
+    // Forbidden or already gone — nothing to revalidate, surface nothing
+    // (the page will simply still show the row for anyone allowed to see it).
+    return
+  }
   revalidatePath("/tasks")
+  revalidatePath("/")
 }

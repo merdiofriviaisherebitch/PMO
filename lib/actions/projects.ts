@@ -3,15 +3,14 @@
 import { revalidatePath } from "next/cache"
 
 import { createClient } from "@/lib/supabase/server"
+import { type ActionResult, rlsAwareMessage } from "@/lib/actions/shared"
 import {
   fieldErrors,
   projectCreateSchema,
   projectUpdateSchema,
 } from "@/lib/validation"
 
-export type ActionResult =
-  | { ok: true }
-  | { ok: false; errors: Record<string, string> }
+export type { ActionResult }
 
 /**
  * Create a project. Executive/PMO only — but we do NOT check the role here; the
@@ -81,16 +80,4 @@ export async function updateProject(
   revalidatePath("/projects")
   revalidatePath(`/projects/${parsed.data.id}`)
   return { ok: true }
-}
-
-/** Turn an opaque RLS/permission error into a human, governance-aware message. */
-function rlsAwareMessage(raw: string, action: string): string {
-  if (
-    raw.includes("row-level security") ||
-    raw.includes("violates row-level") ||
-    raw.includes("permission denied")
-  ) {
-    return `You don't have permission to ${action}.`
-  }
-  return raw
 }

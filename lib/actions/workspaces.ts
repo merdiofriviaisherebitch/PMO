@@ -3,11 +3,10 @@
 import { revalidatePath } from "next/cache"
 
 import { createClient } from "@/lib/supabase/server"
+import { type ActionResult, rlsAwareMessage } from "@/lib/actions/shared"
 import { fieldErrors, workspaceRagSchema } from "@/lib/validation"
 
-export type ActionResult =
-  | { ok: true }
-  | { ok: false; errors: Record<string, string> }
+export type { ActionResult }
 
 /**
  * Set a workspace's RAG health. RLS (migration 0014) allows this only for the
@@ -31,12 +30,10 @@ export async function setWorkspaceRag(
     .eq("id", parsed.data.id)
 
   if (error) {
-    const msg =
-      error.message.includes("row-level security") ||
-      error.message.includes("permission denied")
-        ? "You don't have permission to update this workspace."
-        : error.message
-    return { ok: false, errors: { _form: msg } }
+    return {
+      ok: false,
+      errors: { _form: rlsAwareMessage(error.message, "update this workspace") },
+    }
   }
 
   revalidatePath("/projects")
