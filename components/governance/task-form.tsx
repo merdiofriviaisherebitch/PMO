@@ -12,7 +12,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { createTask, type ActionResult } from "@/lib/actions/tasks"
+import { createTask } from "@/lib/actions/tasks"
+import type { ActionResult } from "@/lib/actions/shared"
 
 /**
  * New-task form. The workspace list is pre-filtered to ones the caller may write

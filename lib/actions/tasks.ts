@@ -10,8 +10,6 @@ import {
   taskUpdateSchema,
 } from "@/lib/validation"
 
-export type { ActionResult }
-
 /**
  * Create a task. RLS (migration 0010) enforces the task lands in a workspace the
  * caller's department owns (or any, for an executive); a cross-department
@@ -88,7 +86,10 @@ export async function updateTask(
     }
   }
 
+  // Task RAG also rolls up into the project detail page; bust /projects too.
   revalidatePath("/tasks")
+  revalidatePath("/projects", "layout")
+  revalidatePath("/")
   return { ok: true }
 }
 
@@ -112,5 +113,6 @@ export async function deleteTask(formData: FormData): Promise<void> {
     return
   }
   revalidatePath("/tasks")
+  revalidatePath("/projects", "layout")
   revalidatePath("/")
 }

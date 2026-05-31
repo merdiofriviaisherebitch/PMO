@@ -13,7 +13,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { createProject, type ActionResult } from "@/lib/actions/projects"
+import { createProject } from "@/lib/actions/projects"
+import type { ActionResult } from "@/lib/actions/shared"
 
 /**
  * New-project form (executive only). The action calls createProject; if RLS

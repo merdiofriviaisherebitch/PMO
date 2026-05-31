@@ -4,13 +4,12 @@ import { revalidatePath } from "next/cache"
 
 import { createClient } from "@/lib/supabase/server"
 import { type ActionResult, rlsAwareMessage } from "@/lib/actions/shared"
+import { getAppIdentity } from "@/lib/auth/claims"
 import {
   fieldErrors,
   projectCreateSchema,
   projectUpdateSchema,
 } from "@/lib/validation"
-
-export type { ActionResult }
 
 /**
  * Create a project. Executive/PMO only — but we do NOT check the role here; the
@@ -30,10 +29,15 @@ export async function createProject(
   if (!parsed.success) return { ok: false, errors: fieldErrors(parsed.error) }
 
   const supabase = await createClient()
+  // Record the acting executive as owner — later phases (baseline-lock
+  // authority §18 Q9, reports) need this. The id comes from the verified JWT,
+  // never from the client.
+  const identity = await getAppIdentity()
   const { error } = await supabase.from("projects").insert({
     name: parsed.data.name,
     description: parsed.data.description || null,
     status: parsed.data.status,
+    owner_id: identity?.userId ?? null,
   })
 
   if (error) {

@@ -34,7 +34,7 @@ describe("projectCreateSchema", () => {
 })
 
 describe("taskCreateSchema", () => {
-  it("requires a workspace uuid", () => {
+  it("requires a workspace id", () => {
     const r = taskCreateSchema.safeParse({ workspaceId: "not-a-uuid", title: "Do it" })
     expect(r.success).toBe(false)
     if (!r.success) expect(fieldErrors(r.error).workspaceId).toBeTruthy()
@@ -42,7 +42,7 @@ describe("taskCreateSchema", () => {
 
   it("accepts a valid task", () => {
     const r = taskCreateSchema.safeParse({
-      workspaceId: "00000000-0000-0000-0000-000000000001",
+      workspaceId: "f47ac10b-58cc-4372-a567-0e02b2c3d479",
       title: "Submit permit",
     })
     expect(r.success).toBe(true)
@@ -52,12 +52,12 @@ describe("taskCreateSchema", () => {
 describe("workspaceRagSchema", () => {
   it("only accepts rag enum values", () => {
     const good = workspaceRagSchema.safeParse({
-      id: "00000000-0000-0000-0000-000000000001",
+      id: "f47ac10b-58cc-4372-a567-0e02b2c3d479",
       ragStatus: "amber",
     })
     expect(good.success).toBe(true)
     const bad = workspaceRagSchema.safeParse({
-      id: "00000000-0000-0000-0000-000000000001",
+      id: "f47ac10b-58cc-4372-a567-0e02b2c3d479",
       ragStatus: "blue",
     })
     expect(bad.success).toBe(false)
