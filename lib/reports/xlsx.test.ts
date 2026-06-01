@@ -57,12 +57,13 @@ const INPUT: ReportInput = {
           { task_id: "t1", title: "Contract Review", startDateVarianceDays: 5, dueDateVarianceDays: 3, startDateChange: null, dueDateChange: null },
         ],
         ragChanges: [],
+        budgetVariances: [],
       },
     },
     {
       projectId: "p2",
       projectName: "No Change Project",
-      delta: { hasChanges: false, addedTasks: [], removedTasks: [], scheduleVariances: [], ragChanges: [] },
+      delta: { hasChanges: false, addedTasks: [], removedTasks: [], scheduleVariances: [], ragChanges: [], budgetVariances: [] },
     },
   ],
 }

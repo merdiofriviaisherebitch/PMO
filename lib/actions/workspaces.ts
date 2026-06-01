@@ -4,7 +4,11 @@ import { revalidatePath } from "next/cache"
 
 import { createClient } from "@/lib/supabase/server"
 import { type ActionResult, rlsAwareMessage } from "@/lib/actions/shared"
-import { fieldErrors, workspaceRagSchema } from "@/lib/validation"
+import {
+  fieldErrors,
+  workspaceCreateSchema,
+  workspaceRagSchema,
+} from "@/lib/validation"
 
 /**
  * Set a workspace's RAG health. RLS (migration 0015) allows this only for a
@@ -48,6 +52,46 @@ export async function setWorkspaceRag(
   // renders the workspace RAG badge), plus the dashboard roll-up.
   revalidatePath("/projects")
   revalidatePath(`/projects/${data[0].project_id}`)
+  revalidatePath("/")
+  return { ok: true }
+}
+
+/**
+ * Assign a department to a project (creates its workspace). RLS (migration 0014)
+ * allows INSERT only for an EXECUTIVE; a director/member attempt is rejected at the
+ * DB layer. unique(project_id, department_id) makes a duplicate a clean message.
+ */
+export async function createWorkspace(
+  _prev: ActionResult | null,
+  formData: FormData,
+): Promise<ActionResult> {
+  const parsed = workspaceCreateSchema.safeParse({
+    projectId: formData.get("projectId"),
+    departmentId: formData.get("departmentId"),
+  })
+  if (!parsed.success) return { ok: false, errors: fieldErrors(parsed.error) }
+
+  const supabase = await createClient()
+  const { error } = await supabase.from("department_workspaces").insert({
+    project_id: parsed.data.projectId,
+    department_id: parsed.data.departmentId,
+  })
+
+  if (error) {
+    if (error.code === "23505") {
+      return {
+        ok: false,
+        errors: { _form: "That department is already assigned to this project." },
+      }
+    }
+    return {
+      ok: false,
+      errors: { _form: rlsAwareMessage(error.message, "assign a department to this project") },
+    }
+  }
+
+  revalidatePath(`/projects/${parsed.data.projectId}`)
+  revalidatePath("/projects")
   revalidatePath("/")
   return { ok: true }
 }

@@ -1082,6 +1082,10 @@ export type Database = {
         Args: { p_limit?: number; p_now?: string }
         Returns: number
       }
+      recompute_project_rag: {
+        Args: { p_project_id: string }
+        Returns: undefined
+      }
       report_dispatch: { Args: { p_period: string }; Returns: undefined }
       resolve_escalations: { Args: { p_now: string }; Returns: undefined }
       resolve_scope: {

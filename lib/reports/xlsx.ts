@@ -51,7 +51,7 @@ export async function renderReportXlsx(model: ReportModel): Promise<Uint8Array> 
 
   // ── Variance sheet ────────────────────────────────────────────────────────
   const varianceSheet = wb.addWorksheet("Variance")
-  varianceSheet.addRow(["Project", "Added", "Removed", "Schedule Changes", "RAG Changes"])
+  varianceSheet.addRow(["Project", "Added", "Removed", "Schedule Changes", "RAG Changes", "Budget Changes"])
   varianceSheet.getRow(1).font = { bold: true }
 
   for (const row of model.variance) {
@@ -61,6 +61,7 @@ export async function renderReportXlsx(model: ReportModel): Promise<Uint8Array> 
       row.removedCount,
       row.scheduleChangedCount,
       row.ragChangedCount,
+      row.budgetChangedCount,
     ])
   }
 

@@ -146,4 +146,60 @@ describe("computeDelta", () => {
     expect(d.addedTasks.map((t) => t.task_id)).toEqual(["t9"])
     expect(d.hasChanges).toBe(true)
   })
+
+  // ── Budget variance (C2; §3/§5 — the delta surfaces budget drift) ───────────
+  it("detects a budget change between baseline and current", () => {
+    const base: BaselineSnapshot = {
+      project_id: "p1",
+      captured_at: "2026-01-01T00:00:00Z",
+      workspaces: [
+        { workspace_id: "w1", department_id: "d1", rag_status: "green", budget_amount: 1000, tasks: [] },
+      ],
+    }
+    const cur: CurrentState = {
+      workspaces: [
+        { workspace_id: "w1", department_id: "d1", rag_status: "green", budget_amount: 1500, tasks: [] },
+      ],
+    }
+    const d = computeDelta(base, cur)
+    expect(d.hasChanges).toBe(true)
+    expect(d.budgetVariances).toHaveLength(1)
+    expect(d.budgetVariances[0]).toMatchObject({
+      workspace_id: "w1",
+      department_id: "d1",
+      baselineBudget: 1000,
+      currentBudget: 1500,
+      deltaAmount: 500,
+    })
+  })
+
+  it("reports no budget variance when budgets are equal or both absent", () => {
+    const base = snapshot([]) // helper omits budget_amount → undefined
+    const cur = current([])
+    expect(computeDelta(base, cur).budgetVariances).toHaveLength(0)
+
+    const sameBudget: BaselineSnapshot = {
+      project_id: "p1",
+      captured_at: "x",
+      workspaces: [{ workspace_id: "w1", department_id: "d1", rag_status: "green", budget_amount: 200, tasks: [] }],
+    }
+    const curSame: CurrentState = {
+      workspaces: [{ workspace_id: "w1", department_id: "d1", rag_status: "green", budget_amount: 200, tasks: [] }],
+    }
+    expect(computeDelta(sameBudget, curSame).budgetVariances).toHaveLength(0)
+  })
+
+  it("flags a budget added since baseline (null → value) with a null deltaAmount", () => {
+    const base: BaselineSnapshot = {
+      project_id: "p1",
+      captured_at: "x",
+      workspaces: [{ workspace_id: "w1", department_id: "d1", rag_status: "green", budget_amount: null, tasks: [] }],
+    }
+    const cur: CurrentState = {
+      workspaces: [{ workspace_id: "w1", department_id: "d1", rag_status: "green", budget_amount: 2000, tasks: [] }],
+    }
+    const v = computeDelta(base, cur).budgetVariances
+    expect(v).toHaveLength(1)
+    expect(v[0]).toMatchObject({ baselineBudget: null, currentBudget: 2000, deltaAmount: null })
+  })
 })

@@ -54,6 +54,7 @@ const INPUT: ReportInput = {
         removedTasks: [],
         scheduleVariances: [{ task_id: "t1", title: "Task 1", startDateVarianceDays: 2, dueDateVarianceDays: null, startDateChange: null, dueDateChange: null }],
         ragChanges: [],
+        budgetVariances: [],
       },
     },
   ],

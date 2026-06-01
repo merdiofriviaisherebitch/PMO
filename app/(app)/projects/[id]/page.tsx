@@ -11,10 +11,13 @@ import { Badge } from "@/components/ui/badge"
 import { RagBadge } from "@/components/governance/rag-badge"
 import { BaselineForm } from "@/components/governance/baseline-form"
 import { BudgetControls } from "@/components/governance/budget-controls"
+import { WorkspaceRagControl } from "@/components/governance/workspace-rag-control"
+import { AssignWorkspaceForm } from "@/components/governance/assign-workspace-form"
 import { getAppIdentity } from "@/lib/auth/claims"
 import {
   getLatestBaseline,
   getProject,
+  listDepartments,
   listTasks,
   listWorkspacesForProject,
 } from "@/lib/data/governance"
@@ -53,9 +56,16 @@ export default async function ProjectDetailPage({
   // Budget variance for the visible workspaces (RLS-scoped via budget_variance()).
   const budgetLines = await getProjectBudgets(workspaces.map((w) => w.id))
   const budgetByWorkspace = new Map(budgetLines.map((b) => [b.workspace_id, b]))
-  // A director/exec of the owning department may set the budget figure.
+  // A director/exec of the owning department may set the budget figure + RAG.
   const canSetBudget =
     identity?.isExecutive || identity?.role === "director"
+  const isExec = !!identity?.isExecutive
+  // Executive-only: assign another department to this project. An exec sees ALL
+  // workspaces (RLS), so the "already assigned" set is complete for the one role
+  // that may assign; we only offer departments not yet on the project.
+  const departments = isExec ? await listDepartments() : []
+  const assignedDeptIds = new Set(workspaces.map((w) => w.department_id))
+  const unassignedDepartments = departments.filter((d) => !assignedDeptIds.has(d.id))
   // Fetch each workspace's tasks in parallel, then render synchronously —
   // an async callback inside .map() would yield Promises React can't render.
   const tasksByWorkspace = new Map(
@@ -70,6 +80,9 @@ export default async function ProjectDetailPage({
       workspace_id: w.id,
       department_id: w.department_id,
       rag_status: w.rag_status,
+      // Live budget for budget-vs-baseline drift (C2; §3/§5). Reuses the
+      // already-fetched budget_variance() rows — no extra query.
+      budget_amount: budgetByWorkspace.get(w.id)?.budget_amount ?? null,
       tasks: (tasksByWorkspace.get(w.id) ?? []).map((t) => ({
         task_id: t.id,
         title: t.title,
@@ -165,12 +178,34 @@ export default async function ProjectDetailPage({
                         )
                       })()}
                     </div>
+
+                    {canSetBudget ? (
+                      <div className="border-t pt-3">
+                        <p className="text-muted-foreground mb-2 text-sm">
+                          Workspace status
+                        </p>
+                        <WorkspaceRagControl
+                          workspaceId={w.id}
+                          current={w.rag_status}
+                        />
+                      </div>
+                    ) : null}
                   </CardContent>
                 </Card>
               )
             })}
           </div>
         )}
+
+        {isExec ? (
+          <div className="rounded-md border border-dashed p-4">
+            <p className="mb-3 text-sm font-medium">Assign a department</p>
+            <AssignWorkspaceForm
+              projectId={id}
+              departments={unassignedDepartments}
+            />
+          </div>
+        ) : null}
       </div>
 
       {/* Baseline + delta (CLAUDE.md §5 module 5) */}

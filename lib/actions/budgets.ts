@@ -36,11 +36,20 @@ export async function setBudget(
   if (!parsed.success) return { ok: false, errors: fieldErrors(parsed.error) }
 
   const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
   // Upsert on the unique(workspace_id) so a director can revise the figure.
+  // approved_by records the acting director (§9); the stamp_actor trigger (0032)
+  // also forces it un-spoofably on both the insert and the revise (update) path.
   const { error } = await supabase
     .from("budgets")
     .upsert(
-      { workspace_id: parsed.data.workspaceId, budget_amount: parsed.data.budgetAmount },
+      {
+        workspace_id: parsed.data.workspaceId,
+        budget_amount: parsed.data.budgetAmount,
+        approved_by: user?.id ?? null,
+      },
       { onConflict: "workspace_id" },
     )
 
@@ -65,10 +74,14 @@ export async function recordActual(
   if (!parsed.success) return { ok: false, errors: fieldErrors(parsed.error) }
 
   const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
   const { error } = await supabase.from("budget_actuals").insert({
     budget_id: parsed.data.budgetId,
     amount: parsed.data.amount,
     description: parsed.data.description || null,
+    recorded_by: user?.id ?? null,
   })
 
   if (error) {

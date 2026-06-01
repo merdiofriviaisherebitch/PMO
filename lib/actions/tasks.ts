@@ -30,6 +30,11 @@ export async function createTask(
   if (!parsed.success) return { ok: false, errors: fieldErrors(parsed.error) }
 
   const supabase = await createClient()
+  // Stamp the real actor (§9, §17 accountability). The DB trigger stamp_actor
+  // (0032) also forces created_by = auth.uid() un-spoofably; this records intent.
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
   const { error } = await supabase.from("tasks").insert({
     workspace_id: parsed.data.workspaceId,
     title: parsed.data.title,
@@ -37,6 +42,7 @@ export async function createTask(
     rag_status: parsed.data.ragStatus,
     start_date: parsed.data.startDate || null,
     due_date: parsed.data.dueDate || null,
+    created_by: user?.id ?? null,
   })
 
   if (error) {

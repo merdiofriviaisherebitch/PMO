@@ -8,15 +8,12 @@ import {
 import {
   Table,
   TableBody,
-  TableCell,
   TableHead,
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { Button } from "@/components/ui/button"
-import { RagBadge } from "@/components/governance/rag-badge"
 import { TaskForm } from "@/components/governance/task-form"
-import { deleteTask } from "@/lib/actions/tasks"
+import { TaskRow } from "@/components/governance/task-row"
 import { listTasks, listWritableWorkspaces } from "@/lib/data/governance"
 
 export default async function TasksPage() {
@@ -56,31 +53,7 @@ export default async function TasksPage() {
               </TableHeader>
               <TableBody>
                 {tasks.map((t) => (
-                  <TableRow key={t.id}>
-                    <TableCell className="font-medium">{t.title}</TableCell>
-                    <TableCell>
-                      <RagBadge status={t.rag_status} />
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {t.due_date
-                        ? new Date(t.due_date).toLocaleDateString()
-                        : "—"}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {/* delete is RLS-scoped: a no-op for rows you can't write */}
-                      <form action={deleteTask} className="inline">
-                        <input type="hidden" name="id" value={t.id} />
-                        <Button
-                          type="submit"
-                          variant="ghost"
-                          size="sm"
-                          className="text-destructive hover:text-destructive"
-                        >
-                          Delete
-                        </Button>
-                      </form>
-                    </TableCell>
-                  </TableRow>
+                  <TaskRow key={t.id} task={t} />
                 ))}
               </TableBody>
             </Table>

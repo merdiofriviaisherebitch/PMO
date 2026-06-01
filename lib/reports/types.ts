@@ -44,6 +44,8 @@ export type VarianceRow = {
   removedCount: number
   scheduleChangedCount: number
   ragChangedCount: number
+  /** Workspaces whose budget drifted from the locked baseline (C2; §3/§5). */
+  budgetChangedCount: number
   scheduleVariances: ProjectDelta["scheduleVariances"]
 }
 

@@ -42,6 +42,13 @@ export const workspaceRagSchema = z.object({
   ragStatus: rag,
 })
 
+/** Assign a department to a project (creates its workspace). Exec-only at the DB
+ * layer (migration 0014); this schema is integrity + UX only. */
+export const workspaceCreateSchema = z.object({
+  projectId: z.guid(),
+  departmentId: z.guid("Pick a department"),
+})
+
 // ── Phase 6: dependencies ────────────────────────────────────────────────────
 // RLS is still the security boundary (a member can only create an edge whose both
 // endpoints are in their department — ADR 0002); this schema is integrity + UX:

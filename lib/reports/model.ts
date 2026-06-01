@@ -55,6 +55,7 @@ export function buildReportModel(input: ReportInput): ReportModel {
       removedCount: d.delta.removedTasks.length,
       scheduleChangedCount: d.delta.scheduleVariances.length,
       ragChangedCount: d.delta.ragChanges.length,
+      budgetChangedCount: d.delta.budgetVariances.length,
       scheduleVariances: d.delta.scheduleVariances,
     }))
 

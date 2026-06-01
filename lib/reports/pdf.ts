@@ -173,7 +173,7 @@ export async function renderReportPdf(model: ReportModel): Promise<Uint8Array> {
     drawNone(ctx, doc)
   } else {
     for (const row of model.variance) {
-      drawRow(ctx, doc, `${row.projectName}: +${row.addedCount} added, -${row.removedCount} removed, ${row.scheduleChangedCount} schedule, ${row.ragChangedCount} RAG changes`)
+      drawRow(ctx, doc, `${row.projectName}: +${row.addedCount} added, -${row.removedCount} removed, ${row.scheduleChangedCount} schedule, ${row.ragChangedCount} RAG, ${row.budgetChangedCount} budget changes`)
       for (const sv of row.scheduleVariances) {
         const parts: string[] = [`  · ${sv.title}`]
         if (sv.startDateVarianceDays != null) parts.push(`start ${sv.startDateVarianceDays > 0 ? "+" : ""}${sv.startDateVarianceDays}d`)

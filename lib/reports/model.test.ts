@@ -64,6 +64,7 @@ const BASE_INPUT: ReportInput = {
         removedTasks: [],
         scheduleVariances: [{ task_id: "t2", title: "Old task", startDateVarianceDays: 3, dueDateVarianceDays: null, startDateChange: null, dueDateChange: null }],
         ragChanges: [{ task_id: "t3", title: "RAG task", from: "green", to: "red" }],
+        budgetVariances: [],
       },
     },
     {
@@ -76,6 +77,7 @@ const BASE_INPUT: ReportInput = {
         removedTasks: [],
         scheduleVariances: [],
         ragChanges: [],
+        budgetVariances: [],
       },
     },
   ],

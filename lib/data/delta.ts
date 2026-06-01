@@ -28,6 +28,9 @@ export type SnapshotWorkspace = {
   workspace_id: string
   department_id: string
   rag_status: Rag
+  /** Locked budget at snapshot time (or the live budget for current state). Optional:
+   * baselines locked before migration 0034 — and workspaces with no budget — omit it. */
+  budget_amount?: number | null
   tasks: SnapshotTask[]
 }
 
@@ -60,12 +63,25 @@ export type RagChange = {
   to: Rag
 }
 
+/** Per-workspace budget drift vs. the locked baseline (C2; §3/§5 — the delta
+ * surfaces budget variance, not just schedule + scope). `deltaAmount` is
+ * current − baseline when both sides have a budget; null when one side is absent
+ * (a budget added or removed since the baseline). */
+export type BudgetVariance = {
+  workspace_id: string
+  department_id: string
+  baselineBudget: number | null
+  currentBudget: number | null
+  deltaAmount: number | null
+}
+
 export type ProjectDelta = {
   hasChanges: boolean
   addedTasks: SnapshotTask[]
   removedTasks: SnapshotTask[]
   scheduleVariances: ScheduleVariance[]
   ragChanges: RagChange[]
+  budgetVariances: BudgetVariance[]
 }
 
 /** Flatten every task across all workspaces into one id→task map. */
@@ -154,11 +170,35 @@ export function computeDelta(
     }
   }
 
+  // Budget drift per workspace (C2). Compare the locked budget against the current
+  // one across the union of workspaces present in either snapshot.
+  const budgetVariances: BudgetVariance[] = []
+  const baseWs = new Map(baseline.workspaces.map((w) => [w.workspace_id, w]))
+  const curWs = new Map(current.workspaces.map((w) => [w.workspace_id, w]))
+  for (const id of new Set([...baseWs.keys(), ...curWs.keys()])) {
+    const b = baseWs.get(id)
+    const c = curWs.get(id)
+    const baselineBudget = b?.budget_amount ?? null
+    const currentBudget = c?.budget_amount ?? null
+    if (baselineBudget === currentBudget) continue // both null, or equal amounts
+    budgetVariances.push({
+      workspace_id: id,
+      department_id: (c ?? b)?.department_id ?? "",
+      baselineBudget,
+      currentBudget,
+      deltaAmount:
+        baselineBudget != null && currentBudget != null
+          ? currentBudget - baselineBudget
+          : null,
+    })
+  }
+
   const hasChanges =
     addedTasks.length > 0 ||
     removedTasks.length > 0 ||
     scheduleVariances.length > 0 ||
-    ragChanges.length > 0
+    ragChanges.length > 0 ||
+    budgetVariances.length > 0
 
-  return { hasChanges, addedTasks, removedTasks, scheduleVariances, ragChanges }
+  return { hasChanges, addedTasks, removedTasks, scheduleVariances, ragChanges, budgetVariances }
 }

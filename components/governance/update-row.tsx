@@ -4,10 +4,12 @@ import { useActionState } from "react"
 
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { Textarea } from "@/components/ui/textarea"
 import {
   approveUpdate,
   rejectUpdate,
   reviseUpdate,
+  saveDraftContent,
   submitUpdate,
 } from "@/lib/actions/updates"
 import type { ActionResult } from "@/lib/actions/shared"
@@ -57,9 +59,18 @@ export function UpdateRow({
     reviseUpdate,
     null,
   )
+  const [saveState, saveAction, saving] = useActionState<ActionResult | null, FormData>(
+    saveDraftContent,
+    null,
+  )
+
+  // Content (the weekly narrative) is editable only while draft/rejected — the DB
+  // transition guard (migration 0019) enforces the same rule server-side.
+  const canEditNotes = update.status === "draft" || update.status === "rejected"
 
   return (
-    <div className="flex items-center justify-between gap-4 rounded-md border px-4 py-3">
+    <div className="rounded-md border px-4 py-3">
+      <div className="flex items-center justify-between gap-4">
       <div className="min-w-0">
         <div className="flex items-center gap-2">
           <span className="font-medium">{update.label}</span>
@@ -116,6 +127,33 @@ export function UpdateRow({
           </>
         ) : null}
       </div>
+      </div>
+
+      {canEditNotes ? (
+        <form action={saveAction} className="mt-3 space-y-2">
+          <input type="hidden" name="id" value={update.id} />
+          <Textarea
+            name="summary"
+            defaultValue={update.summary}
+            rows={3}
+            placeholder="Progress notes for this week…"
+            aria-label="Weekly update notes"
+          />
+          <div className="flex items-center gap-2">
+            <Button type="submit" size="sm" variant="outline" disabled={saving}>
+              {saving ? "Saving…" : "Save notes"}
+            </Button>
+            {saveState?.ok ? (
+              <span className="text-xs text-emerald-600">Saved.</span>
+            ) : null}
+            {saveState && !saveState.ok ? (
+              <span className="text-destructive text-xs">
+                {saveState.errors._form}
+              </span>
+            ) : null}
+          </div>
+        </form>
+      ) : null}
     </div>
   )
 }

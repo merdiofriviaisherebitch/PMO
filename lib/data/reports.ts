@@ -54,7 +54,14 @@ function kindOf(targetEntityType: string): EscalationKind {
  * CRITICAL (§10): uses the SERVICE-ROLE client. RLS is NOT active. Every section
  * that touches department-scoped data MUST apply .eq("department_id", departmentId)
  * (or an equivalent join-filter) when scope.departmentId is not null.
- * A null departmentId = global executive roll-up: fetch all rows.
+ *
+ * CALLER CONTRACT: a null departmentId = the global, all-departments executive
+ * roll-up — under the service role it deliberately fetches EVERY department's rows.
+ * Because this function cannot see the JWT, callers MUST gate the null scope on an
+ * executive/system actor. The only two callers do: app/api/reports/generate is the
+ * pg_cron/system path, and lib/actions/reports derives the scope from VERIFIED
+ * executive claims (exec → null, director → own department). Do not introduce a
+ * caller that passes null for a non-executive.
  */
 export async function gatherReportInput(
   client: SupabaseClient<Database>,
@@ -123,38 +130,29 @@ export async function gatherReportInput(
   }
 
   // ── Budget ─────────────────────────────────────────────────────────────────
-  // Budgets join to workspaces; workspace.department_id = deptId when scoped.
-  // FILTER: workspace-level department_id filter (join budgets → workspaces).
+  // §20 C4 SINGLE SOURCE: budget RAG comes ONLY from the canonical budget_variance()
+  // function (0021/0023 — zero-budget spend = RED, per-row amber_pct/red_pct). It is
+  // never recomputed here (the old inline 85/100 + zero-budget-green copy was C3, a
+  // governance-credibility bug: the report showed GREEN where the dashboard showed RED).
+  // budget_variance() is SECURITY INVOKER; the service client bypasses RLS, so for a
+  // department report we re-apply the §10 scope filter in code by workspace id.
   let budget: BudgetSummary
+  {
+    const { data: varianceRows, error: vErr } = await client.rpc("budget_variance")
+    if (vErr) throw new Error(`gatherReportInput budget_variance: ${vErr.message}`)
+    const rows = varianceRows ?? []
 
-  if (deptId !== null) {
-    // Load workspaces for dept (already done above but re-fetch for simplicity +
-    // isolation — avoids cross-section coupling).
-    const { data: wsIds2, error: wsErr2 } = await client
-      .from("department_workspaces")
-      .select("id")
-      .eq("department_id", deptId)   // §10 EXPLICIT dept filter
-    if (wsErr2) throw new Error(`gatherReportInput budget workspaces: ${wsErr2.message}`)
-    const ids = (wsIds2 ?? []).map((w) => w.id)
-
-    if (ids.length > 0) {
-      const { data: budgetRows, error: bErr } = await client
-        .from("budgets")
-        .select("id, workspace_id, budget_amount, budget_actuals(amount)")
-        .in("workspace_id", ids)     // §10 EXPLICIT filter via workspace membership
-      if (bErr) throw new Error(`gatherReportInput budgets: ${bErr.message}`)
-
-      budget = buildBudgetSummary(budgetRows ?? [])
+    if (deptId !== null) {
+      const { data: wsIds2, error: wsErr2 } = await client
+        .from("department_workspaces")
+        .select("id")
+        .eq("department_id", deptId)   // §10 EXPLICIT dept filter
+      if (wsErr2) throw new Error(`gatherReportInput budget workspaces: ${wsErr2.message}`)
+      const wanted = new Set((wsIds2 ?? []).map((w) => w.id))
+      budget = summarizeVariance(rows.filter((r) => wanted.has(r.workspace_id)))
     } else {
-      budget = emptyBudgetSummary()
+      budget = summarizeVariance(rows)
     }
-  } else {
-    // Global: all budgets.
-    const { data: budgetRows, error: bErr } = await client
-      .from("budgets")
-      .select("id, workspace_id, budget_amount, budget_actuals(amount)")
-    if (bErr) throw new Error(`gatherReportInput budgets global: ${bErr.message}`)
-    budget = buildBudgetSummary(budgetRows ?? [])
   }
 
   // ── Dependency graph ───────────────────────────────────────────────────────
@@ -374,7 +372,7 @@ async function computeProjectDelta(
   // Current state: tasks in in-scope workspaces.
   let wsQuery = client
     .from("department_workspaces")
-    .select("id, department_id, rag_status, tasks(id, title, rag_status, start_date, due_date)")
+    .select("id, department_id, rag_status, budgets(budget_amount), tasks(id, title, rag_status, start_date, due_date)")
     .eq("project_id", projectId)
 
   if (deptId !== null) {
@@ -389,6 +387,9 @@ async function computeProjectDelta(
       workspace_id: w.id,
       department_id: w.department_id,
       rag_status: w.rag_status as Rag,
+      budget_amount:
+        (w.budgets as unknown as Array<{ budget_amount: number | null }> | null)?.[0]
+          ?.budget_amount ?? null,
       tasks: ((w.tasks as unknown as Array<{
         id: string
         title: string
@@ -412,47 +413,32 @@ async function computeProjectDelta(
 
 // ─── Budget helpers ───────────────────────────────────────────────────────────
 
-type BudgetRow = {
-  id: string
-  workspace_id: string
-  budget_amount: number | null
-  budget_actuals: Array<{ amount: number | null }>
-}
+/** One canonical budget_variance() row (RAG already computed by the DB, §20 C4). */
+type VarianceRow = Database["public"]["Functions"]["budget_variance"]["Returns"][number]
 
-function buildBudgetSummary(rows: BudgetRow[]): BudgetSummary {
-  const summary: BudgetSummary = {
-    totalBudget: 0,
-    totalActual: 0,
-    remaining: 0,
-    red: 0,
-    amber: 0,
-    green: 0,
-    lines: [],
-  }
-
+/** Tally canonical budget_variance() rows into the report's BudgetSummary. The RAG
+ * comes straight from the function (zero-budget spend = RED, per-row thresholds) —
+ * this NEVER re-derives it (§20 C4 single source). */
+function summarizeVariance(rows: VarianceRow[]): BudgetSummary {
+  const summary = emptyBudgetSummary()
   for (const r of rows) {
     const budget = Number(r.budget_amount ?? 0)
-    const actual = (r.budget_actuals ?? []).reduce((sum, a) => sum + Number(a.amount ?? 0), 0)
-    const pctUsed = budget > 0 ? (actual / budget) * 100 : 0
-    const rag: Rag =
-      budget === 0 ? "green" : pctUsed >= 100 ? "red" : pctUsed >= 85 ? "amber" : "green"
-
+    const actual = Number(r.actual_total ?? 0)
     summary.totalBudget += budget
     summary.totalActual += actual
-    if (rag === "red") summary.red++
-    else if (rag === "amber") summary.amber++
+    if (r.rag === "red") summary.red++
+    else if (r.rag === "amber") summary.amber++
     else summary.green++
 
     summary.lines.push({
-      budget_id: r.id,
+      budget_id: r.budget_id,
       workspace_id: r.workspace_id,
       budget_amount: budget,
       actual_total: actual,
-      pct_used: pctUsed,
-      rag,
+      pct_used: Number(r.pct_used ?? 0),
+      rag: r.rag,
     })
   }
-
   summary.remaining = summary.totalBudget - summary.totalActual
   return summary
 }
