@@ -37,7 +37,14 @@ export type EditableTask = {
  * The edit form pre-fills EVERY field (title, description, status, both dates) so
  * saving never blanks an unshown value — updateTask sets each column from the form.
  */
-export function TaskRow({ task }: { task: EditableTask }) {
+export function TaskRow({
+  task,
+  canWrite,
+}: {
+  task: EditableTask
+  /** Viewers are read-only (§4): hide Edit/Delete the DB would reject anyway. */
+  canWrite: boolean
+}) {
   const [editing, setEditing] = useState(false)
   const [pending, startTransition] = useTransition()
   const [result, setResult] = useState<ActionResult | null>(null)
@@ -152,26 +159,32 @@ export function TaskRow({ task }: { task: EditableTask }) {
         {task.due_date ? new Date(task.due_date).toLocaleDateString() : "—"}
       </TableCell>
       <TableCell className="text-right">
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={() => setEditing(true)}
-        >
-          Edit
-        </Button>
-        {/* delete is RLS-scoped: a no-op for rows you can't write */}
-        <form action={deleteTask} className="inline">
-          <input type="hidden" name="id" value={task.id} />
-          <Button
-            type="submit"
-            variant="ghost"
-            size="sm"
-            className="text-destructive hover:text-destructive"
-          >
-            Delete
-          </Button>
-        </form>
+        {canWrite ? (
+          <>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setEditing(true)}
+            >
+              Edit
+            </Button>
+            {/* delete is RLS-scoped: a no-op for rows you can't write */}
+            <form action={deleteTask} className="inline">
+              <input type="hidden" name="id" value={task.id} />
+              <Button
+                type="submit"
+                variant="ghost"
+                size="sm"
+                className="text-destructive hover:text-destructive"
+              >
+                Delete
+              </Button>
+            </form>
+          </>
+        ) : (
+          <span className="text-muted-foreground text-sm">—</span>
+        )}
       </TableCell>
     </TableRow>
   )

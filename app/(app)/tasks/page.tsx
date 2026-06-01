@@ -14,13 +14,18 @@ import {
 } from "@/components/ui/table"
 import { TaskForm } from "@/components/governance/task-form"
 import { TaskRow } from "@/components/governance/task-row"
+import { getAppIdentity } from "@/lib/auth/claims"
 import { listTasks, listWritableWorkspaces } from "@/lib/data/governance"
 
 export default async function TasksPage() {
-  const [tasks, workspaces] = await Promise.all([
+  const [identity, tasks, workspaces] = await Promise.all([
+    getAppIdentity(),
     listTasks(),
     listWritableWorkspaces(),
   ])
+  // Viewers are read-only (§4): don't render write affordances the DB rejects.
+  // RLS remains the real boundary; this is UX hygiene only.
+  const canWrite = !!identity && identity.role !== "viewer"
 
   return (
     <div className="space-y-8">
@@ -53,7 +58,7 @@ export default async function TasksPage() {
               </TableHeader>
               <TableBody>
                 {tasks.map((t) => (
-                  <TaskRow key={t.id} task={t} />
+                  <TaskRow key={t.id} task={t} canWrite={canWrite} />
                 ))}
               </TableBody>
             </Table>
@@ -61,17 +66,19 @@ export default async function TasksPage() {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>New task</CardTitle>
-          <CardDescription>
-            Add a task to one of your department&apos;s workspaces.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <TaskForm workspaces={workspaces} />
-        </CardContent>
-      </Card>
+      {canWrite ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>New task</CardTitle>
+            <CardDescription>
+              Add a task to one of your department&apos;s workspaces.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <TaskForm workspaces={workspaces} />
+          </CardContent>
+        </Card>
+      ) : null}
     </div>
   )
 }

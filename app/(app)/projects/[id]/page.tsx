@@ -59,6 +59,8 @@ export default async function ProjectDetailPage({
   // A director/exec of the owning department may set the budget figure + RAG.
   const canSetBudget =
     identity?.isExecutive || identity?.role === "director"
+  // Recording spend is a normal member activity; viewers are read-only (§4).
+  const canRecord = !!identity && identity.role !== "viewer"
   const isExec = !!identity?.isExecutive
   // Executive-only: assign another department to this project. An exec sees ALL
   // workspaces (RLS), so the "already assigned" set is complete for the one role
@@ -173,6 +175,7 @@ export default async function ProjectDetailPage({
                               workspaceId={w.id}
                               budgetId={b?.budget_id ?? null}
                               canSetBudget={!!canSetBudget}
+                              canRecord={canRecord}
                             />
                           </>
                         )
@@ -241,6 +244,10 @@ export default async function ProjectDetailPage({
                   value={delta.scheduleVariances.length}
                 />
                 <DeltaStat label="RAG changes" value={delta.ragChanges.length} />
+                <DeltaStat
+                  label="Budget changes"
+                  value={delta.budgetVariances.length}
+                />
               </CardContent>
             ) : null}
           </Card>

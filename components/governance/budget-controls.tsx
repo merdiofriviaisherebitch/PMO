@@ -17,10 +17,13 @@ export function BudgetControls({
   workspaceId,
   budgetId,
   canSetBudget,
+  canRecord,
 }: {
   workspaceId: string
   budgetId: string | null
   canSetBudget: boolean
+  /** Member/director/exec of the owning dept may record spend; viewers can't (§4). */
+  canRecord: boolean
 }) {
   const [setState, setAction, setting] = useActionState<ActionResult | null, FormData>(
     setBudget,
@@ -50,16 +53,18 @@ export function BudgetControls({
       ) : null}
 
       {budgetId ? (
-        <form action={actAction} className="flex items-end gap-2">
-          <input type="hidden" name="budgetId" value={budgetId} />
-          <div className="flex-1">
-            <label className="text-muted-foreground text-xs">Record spend (EUR)</label>
-            <Input name="amount" type="number" min="0" step="0.01" required />
-          </div>
-          <Button type="submit" size="sm" variant="outline" disabled={recording}>
-            Record
-          </Button>
-        </form>
+        canRecord ? (
+          <form action={actAction} className="flex items-end gap-2">
+            <input type="hidden" name="budgetId" value={budgetId} />
+            <div className="flex-1">
+              <label className="text-muted-foreground text-xs">Record spend (EUR)</label>
+              <Input name="amount" type="number" min="0" step="0.01" required />
+            </div>
+            <Button type="submit" size="sm" variant="outline" disabled={recording}>
+              Record
+            </Button>
+          </form>
+        ) : null
       ) : (
         <p className="text-muted-foreground text-xs">
           No budget set{canSetBudget ? " yet — set one above." : "."}

@@ -34,6 +34,7 @@ const STATUS_VARIANT: Record<UpdateStatus, "secondary" | "default" | "outline" |
 export function UpdateRow({
   update,
   canApprove,
+  canEdit,
 }: {
   update: {
     id: string
@@ -42,6 +43,8 @@ export function UpdateRow({
     summary: string
   }
   canApprove: boolean
+  /** Owning-department member/director (not a viewer): may submit/revise/edit notes. */
+  canEdit: boolean
 }) {
   const [, submitAction, submitting] = useActionState<ActionResult | null, FormData>(
     submitUpdate,
@@ -66,7 +69,8 @@ export function UpdateRow({
 
   // Content (the weekly narrative) is editable only while draft/rejected — the DB
   // transition guard (migration 0019) enforces the same rule server-side.
-  const canEditNotes = update.status === "draft" || update.status === "rejected"
+  const canEditNotes =
+    canEdit && (update.status === "draft" || update.status === "rejected")
 
   return (
     <div className="rounded-md border px-4 py-3">
@@ -86,7 +90,7 @@ export function UpdateRow({
       </div>
 
       <div className="flex shrink-0 items-center gap-2">
-        {update.status === "draft" ? (
+        {update.status === "draft" && canEdit ? (
           <form action={submitAction}>
             <input type="hidden" name="id" value={update.id} />
             <Button type="submit" size="sm" disabled={submitting}>
@@ -95,7 +99,7 @@ export function UpdateRow({
           </form>
         ) : null}
 
-        {update.status === "rejected" ? (
+        {update.status === "rejected" && canEdit ? (
           <form action={reviseAction}>
             <input type="hidden" name="id" value={update.id} />
             <Button type="submit" size="sm" variant="outline" disabled={revising}>

@@ -44,6 +44,9 @@ export default async function UpdatesPage() {
   ])
 
   const canApprove = identity?.role === "director" || identity?.isExecutive
+  // Viewers are read-only (§4): hide draft/submit/revise/narrative affordances
+  // the DB would reject. RLS stays the real boundary; this is UX hygiene.
+  const canWrite = !!identity && identity.role !== "viewer"
   const existingWorkspaceIds = new Set(updates.map((u) => u.workspace_id))
   const startable = writable.filter((w) => !existingWorkspaceIds.has(w.id))
 
@@ -75,6 +78,7 @@ export default async function UpdatesPage() {
               <UpdateRow
                 key={u.id}
                 canApprove={!!canApprove}
+                canEdit={canWrite}
                 update={{
                   id: u.id,
                   status: u.status,
@@ -91,7 +95,7 @@ export default async function UpdatesPage() {
         </CardContent>
       </Card>
 
-      {startable.length > 0 ? (
+      {canWrite && startable.length > 0 ? (
         <Card>
           <CardHeader>
             <CardTitle>Start an update</CardTitle>
